@@ -20,47 +20,44 @@ import androidx.work.OneTimeWorkRequest;
 import androidx.work.WorkManager;
 
 public class SmsUploadService extends IntentService {
-    // private Context context;
 
+    // Use a final constant for the service name
+    public static final String SERVICE_NAME = "SmsUploadService";
     private final IBinder binder = new LocalBinder();
 
-    // private SmsStoreWorker worker;
     private DigestCache cache;
     private Statistics stats;
 
     public SmsUploadService() {
-        super("SmsUploadService");
+        super(SERVICE_NAME);
     }
 
     @Override
     public void onCreate() {
+        // Initialize cache and stats here to avoid lateinit warnings
         cache = DigestCache.getInstance();
         stats = Statistics.getInstance();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Toast.makeText(this, "service starting", Toast.LENGTH_SHORT).show();
+        // Use a string resource for toast messages
+        Toast.makeText(this, getString(R.string.service_starting), Toast.LENGTH_SHORT).show();
 
-        String cachefilename = getCacheDir().getAbsolutePath() + File.separator + "cache";
-        cache.setFilename(cachefilename);
+        // Extract cache file name into a constant
+        final String CACHE_FILE_NAME = "cache";
+        cache.setFilename(getCacheDir().getAbsolutePath() + File.separator + CACHE_FILE_NAME);
         try {
             cache.load();
-        }
-        catch(IOException ioe) {
-            Toast.makeText(this, "unable to load cache", Toast.LENGTH_SHORT).show();
-            Log.e("service", "Unable to save cache: " + ioe);
+        } catch (IOException ioe) {
+            Log.e("service", "Unable to load cache: " + ioe);
+            // Use a string resource for toast messages
+            Toast.makeText(this, getString(R.string.unable_to_load_cache), Toast.LENGTH_SHORT).show();
         }
 
         refresh();
 
         return START_REDELIVER_INTENT;
-    }
-
-    public class LocalBinder extends Binder {
-        SmsUploadService getService() {
-            return SmsUploadService.this;
-        }
     }
 
     @Override
@@ -74,22 +71,30 @@ public class SmsUploadService extends IntentService {
 
     @Override
     public void onDestroy() {
-        Toast.makeText(this, "service done", Toast.LENGTH_SHORT).show();
+        // Use a string resource for toast messages
+        Toast.makeText(this, getString(R.string.service_done), Toast.LENGTH_SHORT).show();
     }
 
-    public void clear_cache() {
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        super.onTaskRemoved(rootIntent);
+        // Stop the service when the user removes the task
+        stopSelf();
+    }
+
+    public void clearCache() {
         Log.i("service", "Clearing cache...");
         cache.clear();
     }
 
-    public void save_cache() {
+    public void saveCache() {
         Log.i("service", "Saving cache...");
         try {
             cache.save();
-        }
-        catch(IOException ioe) {
-            Toast.makeText(this, "unable to save cache", Toast.LENGTH_SHORT).show();
+        } catch (IOException ioe) {
             Log.e("service", "Unable to save cache: " + ioe);
+            // Use a string resource for toast messages
+            Toast.makeText(this, getString(R.string.unable_to_save_cache), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -97,19 +102,19 @@ public class SmsUploadService extends IntentService {
         // Process any messages already on phone
         Log.i("service", "Running SMS Store Worker...");
 
+        OneTimeWorkRequest request = buildWorkRequest();
+        WorkManager.getInstance(this).enqueue(request);
+    }
+
+    private OneTimeWorkRequest buildWorkRequest() {
         Constraints.Builder builder = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED);
         Data.Builder data = new Data.Builder();
-        OneTimeWorkRequest request =
-                new OneTimeWorkRequest.Builder(SmsStoreWorker.class)
+        return new OneTimeWorkRequest.Builder(SmsStoreWorker.class)
                         .addTag("refresh")
                         .setInputData(data.build())
                         .setConstraints(builder.build())
                         .build();
-
-        Context context = getApplicationContext();
-        WorkManager manager = WorkManager.getInstance(context);
-        manager.enqueue(request);
     }
 
     public void setStatus(String status) {
@@ -123,5 +128,11 @@ public class SmsUploadService extends IntentService {
 
     public void setProcessedCount(int count) {
         stats.setProcessedCount(count);
+    }
+
+    public class LocalBinder extends Binder {
+        SmsUploadService getService() {
+            return SmsUploadService.this;
+        }
     }
 }

@@ -100,7 +100,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        service.save_cache();
+        service.saveCache();
     }
 
     @Override
@@ -123,7 +123,7 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
         if (id == R.id.action_clear_cache) {
-            service.clear_cache();
+            service.clearCache();
             return true;
         }
         if (id == R.id.action_quit) {

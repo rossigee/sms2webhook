@@ -6,4 +6,9 @@
     <string name="action_clear_cache">Clear cache</string>
     <string name="action_quit">Quit</string>
     <string name="activity_logs">Activity logs…</string>
+    <string name="service_starting">Service starting…</string>
+    <string name="service_done">Service done</string>
+    <string name="unable_to_load_cache">Unable to load cache</string>
+    <string name="unable_to_save_cache">Unable to save cache</string>
+
 </resources>
