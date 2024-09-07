@@ -11,25 +11,27 @@ import android.telephony.SmsMessage;
 import android.util.Log;
 import android.widget.Toast;
 
+import static android.provider.Telephony.Sms.Intents.SMS_RECEIVED_ACTION;
 
 public class SmsBroadcastReceiver extends BroadcastReceiver {
-    SmsUploadService service;
-    private final boolean isBound = false;
-
-    Context context;
+    private static final String TAG = "SmsBroadcastReceiver";
+    private static final String ACTION_SMS_RECEIVED = "android.provider.Telephony.SMS_RECEIVED";
+    private static final int SMS_DELAY_BEFORE_REFRESH = 2000; // 2 seconds
+    private SmsUploadService service;
+    private boolean isBound = false;
+    private Context context;
 
     private final ServiceConnection connection = new ServiceConnection() {
+    @Override
         public void onServiceConnected(ComponentName className, IBinder binder) {
-            service = ((SmsUploadService.LocalBinder)binder).getService();
-            Log.d("receiver", "Receiver connected to service");
-
-            // Issue a refresh and unbind
-            service.refresh();
+            service = ((SmsUploadService.LocalBinder) binder).getService();
+            Log.d(TAG, "Receiver connected to service");
         }
 
+        @Override
         public void onServiceDisconnected(ComponentName className) {
             service = null;
-            Log.d("receiver", "Receiver disconnected from service");
+            Log.d(TAG, "Receiver disconnected from service");
         }
     };
 
@@ -37,58 +39,65 @@ public class SmsBroadcastReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         this.context = context;
 
-        Log.i("receiver", "Handling event " + intent.getAction());
-        if (!intent.getAction().equals("android.provider.Telephony.SMS_RECEIVED")) {
+        String action = intent.getAction();
+        Log.i(TAG, "Received intent action: " + action);
+
+        if (!ACTION_SMS_RECEIVED.equals(action)) {
+            Log.w(TAG, "Not handling intent action: " + action);
             return;
         }
 
         Bundle bundle = intent.getExtras();
         if (bundle == null) {
-            Log.w("receiver", "No data found.");
+            Log.w(TAG, "No data found.");
             return;
         }
 
-        // Report on messages arriving.
-        SmsMessage[] messages;
-        String msgFrom = "N/A";
-        try {
+        processIncomingSms(bundle);
+    }
+
+    private void processIncomingSms(Bundle bundle) {
             Object[] pdus = (Object[]) bundle.get("pdus");
-            String format = (String)bundle.get("format");
-            messages = new SmsMessage[pdus.length];
-            for (int i = 0; i < messages.length; i++) {
-                messages[i] = SmsMessage.createFromPdu((byte[]) pdus[i], format);
-                msgFrom = messages[i].getOriginatingAddress();
-                Log.i("receiver", "Handling SMS from '" + msgFrom + "'");
-                Toast.makeText(context, "Handling SMS from '" + msgFrom + "'", Toast.LENGTH_SHORT).show();
-                String msgBody = messages[i].getMessageBody();
-                Log.d("receiver", msgBody);
-            }
-        }
-        catch (Exception e) {
-            Log.e("receiver", e.toString());
-        }
+        String format = (String) bundle.get("format");
 
-        // Wait a sec, just to be sure SMS has a chance to arrive in Inbox (needed?)
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-
-        // Connect to service
-        Log.i("receiver", "Connecting to service...");
-        Intent serviceIntent = new Intent(context, SmsUploadService.class);
-        context.startService(serviceIntent);
-        IBinder binder = peekService(context, serviceIntent);
-        if (binder == null) {
-            Log.e("receiver", "Binder is null");
+        if (pdus == null || pdus.length == 0) {
+            Log.w(TAG, "No SMS data found.");
             return;
         }
-        service = ((SmsUploadService.LocalBinder)binder).getService();
-        Log.i("receiver", "Connected to service...");
 
-        // Force collection of new messages in inbox
-        service.setStatus("Received message from '" + msgFrom + "'\n");
-        service.refresh();
+        for (int i = 0; i < pdus.length; i++) {
+            SmsMessage message = SmsMessage.createFromPdu((byte[]) pdus[i], format);
+            if (message == null) {
+                Log.w(TAG, "Failed to create SMS message from PDU.");
+                continue;
+            }
+
+            String msgFrom = message.getOriginatingAddress();
+            String msgBody = message.getMessageBody();
+
+            Log.i(TAG, "Received SMS from '" + msgFrom + "'");
+            Log.d(TAG, msgBody);
+            Toast.makeText(context, "Received SMS from '" + msgFrom + "'", Toast.LENGTH_SHORT).show();
+
+            // Wait a short delay before connecting to the service
+            new Thread(() -> {
+                try {
+                    Thread.sleep(SMS_DELAY_BEFORE_REFRESH);
+                } catch (InterruptedException e) {
+                    Log.e(TAG, "Failed to delay SMS processing", e);
+                }
+
+                // Connect to service
+                Log.i(TAG, "Connecting to service...");
+                Intent serviceIntent = new Intent(context, SmsUploadService.class);
+                context.startService(serviceIntent);
+
+                // If the service is not already bound, bind it now
+                if (!isBound) {
+                    context.bindService(serviceIntent, connection, Context.BIND_AUTO_CREATE);
+                    isBound = true;
+                }
+            }).start();
+        }
     }
 }

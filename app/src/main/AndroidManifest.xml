@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.golder.sms2webhook">
 
-    <uses-feature
-        android:name="android.hardware.telephony"
-        android:required="false" />
+    <!-- Make the telephony hardware feature not mandatory -->
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
+    <!-- Request necessary permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
-
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
 
@@ -17,6 +17,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
 
+        <!-- Main activity with single top launch mode and exported -->
         <activity
             android:name=".MainActivity"
             android:launchMode="singleTop"
@@ -27,20 +28,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Settings activity with parent activity defined -->
         <activity
             android:name=".SettingsActivity"
             android:label="@string/action_settings"
-            android:parentActivityName=".MainActivity">
+            android:parentActivityName=".MainActivity"
+            android:exported="false" />
 
-            <meta-data
-                android:name="android.support.PARENT_ACTIVITY"
-                android:value=".MainActivity"/>
-        </activity>
-
+        <!-- Service for uploading SMS data -->
         <service
             android:name=".SmsUploadService"
-            />
+            android:exported="false" />
 
+        <!-- Broadcast receiver for receiving SMS data -->
         <receiver
             android:name=".SmsBroadcastReceiver"
             android:enabled="true"

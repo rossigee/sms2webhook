@@ -10,8 +10,6 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.IBinder;
 import android.util.Log;
-// import android.widget.Toast;
-
 import org.golder.sms2webhook.AlreadyExistsException;
 
 import org.apache.commons.lang3.StringUtils;
@@ -28,9 +26,10 @@ import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
 public class SmsStoreWorker extends Worker {
+
     private final DigestCache cache;
 
-    SmsUploadService service;
+    private SmsUploadService service;
     private boolean isBound = false;
 
     public SmsStoreWorker(@NonNull Context context, @NonNull WorkerParameters parameters) {
@@ -41,7 +40,7 @@ public class SmsStoreWorker extends Worker {
 
     private final ServiceConnection connection = new ServiceConnection() {
         public void onServiceConnected(ComponentName className, IBinder binder) {
-            service = ((SmsUploadService.LocalBinder)binder).getService();
+            service = ((SmsUploadService.LocalBinder) binder).getService();
             Log.d("worker", "Worker connected to service");
         }
 
@@ -51,15 +50,8 @@ public class SmsStoreWorker extends Worker {
         }
     };
 
-    protected void onStart() {
-        Intent intent = new Intent(getApplicationContext(), SmsUploadService.class);
-        isBound = getApplicationContext().bindService(intent, connection, Context.BIND_AUTO_CREATE);
-        if(!isBound) {
-            Log.e("worker", "Unable to bind to service.");
-        }
-    }
-
-    protected void onStop() {
+    @Override
+    public void onStopped() {
         if (isBound) {
             getApplicationContext().unbindService(connection);
             isBound = false;
@@ -69,12 +61,16 @@ public class SmsStoreWorker extends Worker {
     @NonNull
     @Override
     public Result doWork() {
-        onStart();
+        Intent intent = new Intent(getApplicationContext(), SmsUploadService.class);
+        isBound = getApplicationContext().bindService(intent, connection, Context.BIND_AUTO_CREATE);
+        if (!isBound) {
+            Log.e("worker", "Unable to bind to service.");
+        }
 
         // Check for credentials first
         SharedPreferences prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         String webhookUrl = prefs.getString("webhook_url", "");
-        if(webhookUrl.isEmpty()) {
+        if (webhookUrl.isEmpty()) {
             Log.e("worker", "Webhook URL is empty. Please configure in settings.");
             service.setStatus("Webhook URL is empty. Please configure in settings.\n");
             return Result.failure();
@@ -139,10 +135,9 @@ public class SmsStoreWorker extends Worker {
                     WebhookUploader.upload(msg, objectname, prefs);
                     service.setStatus("Processed message from '" + sender + "'\n");
                     cache.add(objectname);
-                } catch (AlreadyExistsException aee) {
-                    Log.i("worker", "Already exists: " + aee);
-                    service.setStatus("Message already uploaded from '" + sender + "'\n");
-                    cache.add(objectname);
+                } catch (WebhookUploader.WebhookUploadException whue) {
+                    Log.e("worker", "Upload exception: " + whue);
+                    service.setStatus("Upload exception processing message from '" + sender + "': " + whue + "'\n");
                 } catch (IllegalArgumentException iae) {
                     Log.e("worker", "Illegal argument: " + iae);
                     service.setStatus("Error processing message from '" + sender + "': " + iae + "\n");
@@ -191,6 +186,4 @@ public class SmsStoreWorker extends Worker {
         for (byte b : bytes) result.append(Integer.toString((b & 0xff) + 0x100, 16).substring(1));
         return result.toString();
     }
-
-
 }

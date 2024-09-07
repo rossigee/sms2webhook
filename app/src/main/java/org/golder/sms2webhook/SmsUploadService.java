@@ -10,21 +10,22 @@ import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
-import java.io.File;
-import java.io.IOException;
-
 import androidx.work.Constraints;
 import androidx.work.Data;
 import androidx.work.NetworkType;
 import androidx.work.OneTimeWorkRequest;
 import androidx.work.WorkManager;
 
+import java.io.File;
+import java.io.IOException;
+
 public class SmsUploadService extends IntentService {
 
     // Use a final constant for the service name
     public static final String SERVICE_NAME = "SmsUploadService";
-    private final IBinder binder = new LocalBinder();
+    private static final String TAG = "SmsUploadService";
 
+    private final IBinder binder = new LocalBinder();
     private DigestCache cache;
     private Statistics stats;
 
@@ -34,30 +35,37 @@ public class SmsUploadService extends IntentService {
 
     @Override
     public void onCreate() {
-        // Initialize cache and stats here to avoid lateinit warnings
+        super.onCreate();
         cache = DigestCache.getInstance();
         stats = Statistics.getInstance();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // Use a string resource for toast messages
-        Toast.makeText(this, getString(R.string.service_starting), Toast.LENGTH_SHORT).show();
-
-        // Extract cache file name into a constant
+        showServiceStartingToast();
         final String CACHE_FILE_NAME = "cache";
         cache.setFilename(getCacheDir().getAbsolutePath() + File.separator + CACHE_FILE_NAME);
-        try {
-            cache.load();
-        } catch (IOException ioe) {
-            Log.e("service", "Unable to load cache: " + ioe);
-            // Use a string resource for toast messages
-            Toast.makeText(this, getString(R.string.unable_to_load_cache), Toast.LENGTH_SHORT).show();
-        }
-
+        loadCache();
         refresh();
 
         return START_REDELIVER_INTENT;
+    }
+
+    private void showServiceStartingToast() {
+        Toast.makeText(this, getString(R.string.service_starting), Toast.LENGTH_SHORT).show();
+    }
+
+    private void loadCache() {
+        try {
+            cache.load();
+        } catch (IOException ioe) {
+            Log.e(TAG, "Unable to load cache: " + ioe);
+            showUnableToLoadCacheToast();
+        }
+    }
+
+    private void showUnableToLoadCacheToast() {
+        Toast.makeText(this, getString(R.string.unable_to_load_cache), Toast.LENGTH_SHORT).show();
     }
 
     @Override
@@ -65,43 +73,47 @@ public class SmsUploadService extends IntentService {
         return binder;
     }
 
+    @Override
     protected void onHandleIntent(Intent intent) {
-        Log.i("service", "Received intent: " + intent);
+        Log.i(TAG, "Received intent: " + intent);
     }
 
     @Override
     public void onDestroy() {
-        // Use a string resource for toast messages
+        showServiceDoneToast();
+    }
+
+    private void showServiceDoneToast() {
         Toast.makeText(this, getString(R.string.service_done), Toast.LENGTH_SHORT).show();
     }
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
         super.onTaskRemoved(rootIntent);
-        // Stop the service when the user removes the task
         stopSelf();
     }
 
     public void clearCache() {
-        Log.i("service", "Clearing cache...");
+        Log.i(TAG, "Clearing cache...");
         cache.clear();
     }
 
     public void saveCache() {
-        Log.i("service", "Saving cache...");
+        Log.i(TAG, "Saving cache...");
         try {
             cache.save();
         } catch (IOException ioe) {
-            Log.e("service", "Unable to save cache: " + ioe);
-            // Use a string resource for toast messages
-            Toast.makeText(this, getString(R.string.unable_to_save_cache), Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "Unable to save cache: " + ioe);
+            showUnableToSaveCacheToast();
         }
     }
 
-    public void refresh() {
-        // Process any messages already on phone
-        Log.i("service", "Running SMS Store Worker...");
+    private void showUnableToSaveCacheToast() {
+        Toast.makeText(this, getString(R.string.unable_to_save_cache), Toast.LENGTH_SHORT).show();
+    }
 
+    public void refresh() {
+        Log.i(TAG, "Running SMS Store Worker...");
         OneTimeWorkRequest request = buildWorkRequest();
         WorkManager.getInstance(this).enqueue(request);
     }
@@ -118,7 +130,7 @@ public class SmsUploadService extends IntentService {
     }
 
     public void setStatus(String status) {
-        Log.i("service", "STATUS: " + status);
+        Log.i(TAG, "STATUS: " + status);
         new Handler(Looper.getMainLooper()).post(() -> stats.setStatus(status));
     }
 

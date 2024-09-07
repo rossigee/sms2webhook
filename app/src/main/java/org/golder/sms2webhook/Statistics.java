@@ -6,13 +6,15 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 public class Statistics {
-    public int inboxCount = 0;
-    public int processedCount = 0;
+    private int inboxCount = 0;
+    private int processedCount = 0;
 
-    public String status;
+    private String status;
 
     private TextView textView;
     private ProgressBar progress;
+
+    private final Object lock = new Object();
 
     @SuppressLint("StaticFieldLeak")
     private static volatile Statistics instance;
@@ -36,21 +38,46 @@ public class Statistics {
 
     public void setStatus(String status) {
         this.status = status;
-        if(textView != null) {
-            new Activity().runOnUiThread(() -> textView.append(status));
-        }
+        notifyListeners();
     }
 
     public void setInboxCount(int count) {
+        synchronized (lock) {
         this.inboxCount = count;
-        if(progress != null) {
+        }
+        notifyListeners();
+        if (progress != null) {
             progress.setMax(count);
         }
     }
+
     public void setProcessedCount(int count) {
-        this.processedCount = count;
-        if(progress != null) {
+        synchronized (lock) {
+            this.processedCount = count;
+}
+        if (progress != null) {
             progress.setProgress(count);
+        }
+        notifyListeners();
+    }
+
+    private void notifyListeners() {
+        if (textView != null) {
+            new Activity().runOnUiThread(() -> textView.append(status));
+        } else {
+            textView = null;
+        }
+    }
+
+    public int getInboxCount() {
+        synchronized (lock) {
+            return inboxCount;
+        }
+    }
+
+    public int getProcessedCount() {
+        synchronized (lock) {
+            return processedCount;
         }
     }
 }
