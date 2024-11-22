@@ -12,8 +12,6 @@ import androidx.core.app.NavUtils;
  * Activity that handles application settings.
  */
 public class SettingsActivity extends AppCompatActivity {
-    // Removed unused EditText widget_aws_access_key_id
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

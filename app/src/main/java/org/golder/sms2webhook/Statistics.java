@@ -1,9 +1,6 @@
 package org.golder.sms2webhook;
 
 import android.annotation.SuppressLint;
-import android.app.Activity;
-import android.widget.ProgressBar;
-import android.widget.TextView;
 
 public class Statistics {
     private int inboxCount = 0;
@@ -11,29 +8,14 @@ public class Statistics {
 
     private String status;
 
-    private TextView textView;
-    private ProgressBar progress;
-
     private final Object lock = new Object();
 
     @SuppressLint("StaticFieldLeak")
-    private static volatile Statistics instance;
+    private static volatile Statistics instance = new Statistics();
     private static final Object monitor = new Object();
 
     public static Statistics getInstance() {
-        if (instance == null) {
-            synchronized (monitor) {
-                if (instance == null) {
-                    instance = new Statistics();
-                }
-            }
-        }
         return instance;
-    }
-
-    public void setWidgets(TextView textView, ProgressBar progress) {
-        this.textView = textView;
-        this.progress = progress;
     }
 
     public void setStatus(String status) {
@@ -43,30 +25,29 @@ public class Statistics {
 
     public void setInboxCount(int count) {
         synchronized (lock) {
-        this.inboxCount = count;
+            this.inboxCount = count;
         }
         notifyListeners();
-        if (progress != null) {
-            progress.setMax(count);
-        }
+//        if (progress != null) {
+//            progress.setMax(count);
+//        }
     }
 
     public void setProcessedCount(int count) {
         synchronized (lock) {
             this.processedCount = count;
-}
-        if (progress != null) {
-            progress.setProgress(count);
         }
+//        if (progress != null) {
+//            progress.setProgress(count);
+//        }
         notifyListeners();
     }
 
     private void notifyListeners() {
-        if (textView != null) {
-            new Activity().runOnUiThread(() -> textView.append(status));
-        } else {
-            textView = null;
-        }
+//        if (textView == null || status == null) {
+//            return;
+//        }
+//        textView.append(status);
     }
 
     public int getInboxCount() {

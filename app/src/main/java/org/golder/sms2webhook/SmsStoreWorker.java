@@ -1,189 +1,88 @@
 package org.golder.sms2webhook;
 
-import android.content.ComponentName;
-import android.content.ContentResolver;
+import android.annotation.SuppressLint;
 import android.content.Context;
-import android.content.Intent;
-import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.database.Cursor;
-import android.net.Uri;
-import android.os.IBinder;
+import android.database.SQLException;
+import android.telephony.SmsMessage;
 import android.util.Log;
-import org.golder.sms2webhook.AlreadyExistsException;
 
-import org.apache.commons.lang3.StringUtils;
-import org.json.JSONException;
 import org.json.JSONObject;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import org.json.JSONArray;
 
 import androidx.annotation.NonNull;
+import androidx.preference.PreferenceManager;
+import androidx.work.Data;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
+import java.net.HttpURLConnection;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+import org.json.JSONException;
+
+import org.golder.sms2webhook.DigestUtil;
+
 public class SmsStoreWorker extends Worker {
+    private static final String TAG = SmsStoreWorker.class.getSimpleName();
 
-    private final DigestCache cache;
-
-    private SmsUploadService service;
-    private boolean isBound = false;
+    private Context context;
 
     public SmsStoreWorker(@NonNull Context context, @NonNull WorkerParameters parameters) {
         super(context, parameters);
-
-        cache = DigestCache.getInstance();
-    }
-
-    private final ServiceConnection connection = new ServiceConnection() {
-        public void onServiceConnected(ComponentName className, IBinder binder) {
-            service = ((SmsUploadService.LocalBinder) binder).getService();
-            Log.d("worker", "Worker connected to service");
-        }
-
-        public void onServiceDisconnected(ComponentName className) {
-            service = null;
-            Log.d("worker", "Worker disconnected from service");
-        }
-    };
-
-    @Override
-    public void onStopped() {
-        if (isBound) {
-            getApplicationContext().unbindService(connection);
-            isBound = false;
-        }
+        this.context = context;
     }
 
     @NonNull
     @Override
     public Result doWork() {
-        Intent intent = new Intent(getApplicationContext(), SmsUploadService.class);
-        isBound = getApplicationContext().bindService(intent, connection, Context.BIND_AUTO_CREATE);
-        if (!isBound) {
-            Log.e("worker", "Unable to bind to service.");
-        }
+        Log.i(TAG, "Working...");
 
-        // Check for credentials first
-        SharedPreferences prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-        String webhookUrl = prefs.getString("webhook_url", "");
-        if (webhookUrl.isEmpty()) {
-            Log.e("worker", "Webhook URL is empty. Please configure in settings.");
-            service.setStatus("Webhook URL is empty. Please configure in settings.\n");
+        // Unpack message
+        Data inputData = getInputData();
+        byte[] pdu = inputData.getByteArray("pdu");
+        if(pdu == null) {
+            Log.w(TAG, "Attempting to process work item with a Null PDU.");
+            //Toast.makeText(ctx, e.getMessage(), Toast.LENGTH_SHORT);
             return Result.failure();
         }
 
-        // Find SMSs already on phone, send for processing
-        ContentResolver resolver = getApplicationContext().getContentResolver();
-        Cursor cursor = resolver.query(Uri.parse("content://sms/inbox"), null, null, null, null);
-        if (cursor == null) {
-            Log.e("worker", "Unable to obtain SMS cursor.");
-            service.setStatus("Unable to obtain SMS cursor.");
-            return Result.failure();
-        }
-        if (!cursor.moveToFirst()) {
-            Log.e("worker", "No SMS messages found in inbox on phone.");
-            service.setStatus("No SMS messages found in inbox on phone.\n");
-            return Result.failure();
-        }
-        service.setInboxCount(cursor.getCount());
-        service.setStatus("Found " + cursor.getCount() + " messages in SMS inbox.\n");
+        String format = inputData.getString("format");
 
-        // Now, just focus on those since the last run (using watermark)
-        int count = 0;
-        do {
-            JSONObject msg = encodeMessage(cursor);
-            String sender = "N/A";
-            try {
-                sender = msg.getString("address");
-            } catch (JSONException je) {
-                Log.w("worker", "Error fetching sender: " + je);
-            }
-
-            //Log.d("worker", msg.toString());
-
-            // Calculate message hash to use as hash key
-            String objectname;
-            try {
-                String[] hashableitems = new String[3];
-                hashableitems[0] = String.valueOf(msg.getLong("date"));
-                hashableitems[1] = msg.getString("address");
-                hashableitems[2] = msg.getString("body");
-                String hashable = StringUtils.join(hashableitems);
-                MessageDigest digest = MessageDigest.getInstance("SHA-256");
-                byte[] hash = digest.digest(hashable.getBytes(StandardCharsets.UTF_8));
-                objectname = bytesToHex(hash);
-            }
-            catch(JSONException je) {
-                Log.e("worker", "Could not determine attributes of message to use for hash: " + je);
-                service.setStatus("Message attributes error from '" + sender + "': " + je + "\n");
-                continue;
-            }
-            catch(NoSuchAlgorithmException nsae) {
-                Log.e("worker", nsae.toString());
-                service.setStatus("Hashing error from '" + sender + "': " + nsae + "\n");
-                continue;
-            }
-
-            // Look up objectname in cache
-            if(!cache.exists(objectname)) {
-                // Pass message to webhook
-                try {
-                    WebhookUploader.upload(msg, objectname, prefs);
-                    service.setStatus("Processed message from '" + sender + "'\n");
-                    cache.add(objectname);
-                } catch (WebhookUploader.WebhookUploadException whue) {
-                    Log.e("worker", "Upload exception: " + whue);
-                    service.setStatus("Upload exception processing message from '" + sender + "': " + whue + "'\n");
-                } catch (IllegalArgumentException iae) {
-                    Log.e("worker", "Illegal argument: " + iae);
-                    service.setStatus("Error processing message from '" + sender + "': " + iae + "\n");
-                }
-            }
-
-            // Update progress
-            count += 1;
-            service.setProcessedCount(count);
-
-        } while (cursor.moveToNext());
-
-        // Flush cache to storage
+        // Determine if we've already successfully sent this one
         try {
-            Log.i("worker", "Saving cache...");
-            cache.save();
-        }
-        catch(IOException ioe) {
-            Log.e("worker", "Unable to save cache: " + ioe);
+            String hash = DigestUtil.getHexSHA256Hash(pdu);
+            Log.i(TAG, "Looking up msghash " + hash + "...");
+            if (DigestCache.get(context, hash) == String.valueOf(HttpURLConnection.HTTP_OK)) {
+                Log.i(TAG, "Skipping already sent msghash " + hash + ".");
+                return Result.success();
+            }
+
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+            String webhookUrl = prefs.getString("webhook_url", "");
+            if(webhookUrl.equals("")) {
+                Log.e(TAG, "Webhook URL not defined.");
+                return Result.failure();
+            }
+
+            WebhookUploader uploader = new WebhookUploader(webhookUrl);
+            SmsMessage message = SmsMessage.createFromPdu(pdu, format);
+            int statusCode = uploader.upload(DigestUtil.toJSON(message));
+            DigestCache.set(context, hash, String.valueOf(statusCode));
+
+        } catch(NoSuchAlgorithmException e) {
+            Log.e(TAG, "Unable to select SHA-256 message hash: " + e.toString());
+            //Toast.makeText(ctx, e.getMessage(), Toast.LENGTH_SHORT);
+            throw new RuntimeException(e);
+        } catch (WebhookUploader.WebhookUploadException e) {
+            Log.e(TAG, "Error sending message to webhook: " + e);
+            //Toast.makeText(ctx, e.getMessage(), Toast.LENGTH_SHORT);
+            throw new RuntimeException(e);
         }
 
+        // Record result in cache
         return Result.success();
-    }
-
-    private JSONObject encodeMessage(Cursor cursor) {
-        JSONObject msg = new JSONObject();
-        for(int idx = 0; idx < cursor.getColumnCount(); idx++) {
-            String colname = cursor.getColumnName(idx);
-            String colval = cursor.getString(idx);
-            try {
-                if (colname.equals("date") || colname.equals("date_sent")) {
-                    msg.put(colname, Long.valueOf(colval));
-                } else {
-                    msg.put(colname, colval);
-                }
-            }
-            catch(JSONException e) {
-                Log.e("worker", "Could not add '" + colval + "' to JSON object.");
-            }
-        }
-        return msg;
-    }
-
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder result = new StringBuilder();
-        for (byte b : bytes) result.append(Integer.toString((b & 0xff) + 0x100, 16).substring(1));
-        return result.toString();
     }
 }
