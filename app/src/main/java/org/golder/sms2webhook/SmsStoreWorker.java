@@ -1,29 +1,23 @@
 package org.golder.sms2webhook;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.SQLException;
-import android.telephony.SmsMessage;
+import android.provider.Telephony;
 import android.util.Log;
 
+import org.json.JSONException;
 import org.json.JSONObject;
-import org.json.JSONArray;
+
+import java.net.HttpURLConnection;
+import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
-import androidx.work.Data;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
-
-import java.net.HttpURLConnection;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-
-import org.json.JSONException;
-
-import org.golder.sms2webhook.DigestUtil;
 
 public class SmsStoreWorker extends Worker {
     private static final String TAG = SmsStoreWorker.class.getSimpleName();
@@ -35,54 +29,104 @@ public class SmsStoreWorker extends Worker {
         this.context = context;
     }
 
+    public static JSONObject encodeMessage(Cursor cursor) {
+        JSONObject jsonObject = new JSONObject();
+
+        try {
+            String[] columns = cursor.getColumnNames();
+            for (String column : columns) {
+                int idx = cursor.getColumnIndex(column);
+                if (idx >= 0) {
+                    jsonObject.put(column, cursor.getString(idx));
+                }
+            }
+        } catch (SQLException | JSONException e) {
+            Log.e(TAG, "Error parsing cursor to JSONObject", e);
+        }
+
+        return jsonObject;
+    }
+
     @NonNull
     @Override
     public Result doWork() {
         Log.i(TAG, "Working...");
 
-        // Unpack message
-        Data inputData = getInputData();
-        byte[] pdu = inputData.getByteArray("pdu");
-        if(pdu == null) {
-            Log.w(TAG, "Attempting to process work item with a Null PDU.");
-            //Toast.makeText(ctx, e.getMessage(), Toast.LENGTH_SHORT);
+        MainApplication app = (MainApplication)context.getApplicationContext();
+
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        String webhookUrl = prefs.getString("webhook_url", "");
+        if(webhookUrl.equals("")) {
+            Log.e(TAG, "Webhook URL not defined.");
+            app.addMessage("ERROR: Webhook URL not defined.");
             return Result.failure();
         }
 
-        String format = inputData.getString("format");
+        Cursor cursor = context.getContentResolver().query(Telephony.Sms.CONTENT_URI, null, null, null, "_id");
+        int total = cursor.getCount();
+        Log.i(TAG, "SMS message count: " + String.valueOf(total));
+        if(total == 0) {
+            Log.i(TAG, "Empty SMS inbox.");
+            app.addMessage("Empty SMS inbox.");
+            app.updateUI();
+            return Result.success();
+        }
 
-        // Determine if we've already successfully sent this one
-        try {
-            String hash = DigestUtil.getHexSHA256Hash(pdu);
-            Log.i(TAG, "Looking up msghash " + hash + "...");
-            if (DigestCache.get(context, hash) == String.valueOf(HttpURLConnection.HTTP_OK)) {
-                Log.i(TAG, "Skipping already sent msghash " + hash + ".");
-                return Result.success();
-            }
+        // Move cursor to watermark
+        int watermark = prefs.getInt("watermark", 0);
+        if(watermark > total) {
+            watermark = total;
+        }
 
-            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-            String webhookUrl = prefs.getString("webhook_url", "");
-            if(webhookUrl.equals("")) {
-                Log.e(TAG, "Webhook URL not defined.");
+        while(watermark < total) {
+            Log.i(TAG, "Processing " + (watermark + 1) + " / " + total);
+            app.addMessage("Processing " + (watermark + 1) + " / " + total);
+//            String msgData = "";
+//            for (int idx = 0; idx < cursor.getColumnCount(); idx++) {
+//                Log.i(TAG, "idx(" + idx + "): name '" + cursor.getColumnName(idx) + "' = " + cursor.getString(idx));
+//            }
+//
+            if (!cursor.moveToPosition(watermark)) {
+                Log.e(TAG, "Unable to move cursor to watermark position " + watermark);
+                app.addMessage("Unable to move cursor to watermark position " + watermark);
                 return Result.failure();
             }
 
-            WebhookUploader uploader = new WebhookUploader(webhookUrl);
-            SmsMessage message = SmsMessage.createFromPdu(pdu, format);
-            int statusCode = uploader.upload(DigestUtil.toJSON(message));
-            DigestCache.set(context, hash, String.valueOf(statusCode));
-
-        } catch(NoSuchAlgorithmException e) {
-            Log.e(TAG, "Unable to select SHA-256 message hash: " + e.toString());
-            //Toast.makeText(ctx, e.getMessage(), Toast.LENGTH_SHORT);
-            throw new RuntimeException(e);
-        } catch (WebhookUploader.WebhookUploadException e) {
-            Log.e(TAG, "Error sending message to webhook: " + e);
-            //Toast.makeText(ctx, e.getMessage(), Toast.LENGTH_SHORT);
-            throw new RuntimeException(e);
+            // Check we haven't previously uploaded this payload
+            JSONObject json = encodeMessage(cursor);
+            String hash = null;
+            try {
+                hash = DigestUtil.getHexSHA256Hash(json.toString().getBytes(StandardCharsets.UTF_8));
+            } catch (NoSuchAlgorithmException e) {
+                throw new RuntimeException(e);
+            }
+            Log.i(TAG, "Looking up msghash " + hash + "...");
+            if (DigestCache.get(context, hash) == HttpURLConnection.HTTP_OK) {
+                Log.i(TAG, "Already successfully sent msghash " + hash + ". Skipping.");
+                app.addMessage("Already successfully sent msghash " + hash + ". Skipping.");
+            }
+            else {
+                // Upload and record status code against digest in cache
+                WebhookUploader uploader = new WebhookUploader(webhookUrl);
+                int statusCode = 0;
+                try {
+                    statusCode = uploader.upload(json);
+                    Log.i(TAG, "Uploaded to web hook with status code: " + statusCode);
+                    app.addMessage("Uploaded to web hook with status code: " + statusCode);
+                } catch (WebhookUploader.WebhookUploadException e) {
+                    throw new RuntimeException(e);
+                }
+                DigestCache.set(context, hash, statusCode);
+                app.updateUI();
+            }
+            watermark += 1;
         }
 
-        // Record result in cache
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putInt("watermark", watermark);
+        editor.apply();
+        app.updateUI();
+
         return Result.success();
     }
 }

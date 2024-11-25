@@ -6,10 +6,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.telephony.SmsMessage;
 import android.util.Log;
-
-import androidx.work.OneTimeWorkRequest;
 
 public class SmsBroadcastReceiver extends BroadcastReceiver {
     private static final String TAG = SmsBroadcastReceiver.class.getSimpleName();
@@ -38,13 +35,16 @@ public class SmsBroadcastReceiver extends BroadcastReceiver {
         }
 
         String format = (String) bundle.get("format");
-        Log.d(TAG, "Incoming message in '" + format + "' format.");
+        Log.d(TAG, "Incoming message bundle in '" + format + "' format.");
+
+        // Print all fields of the bundle
+        for (String key: bundle.keySet()) {
+            String value = (bundle.get(key)).toString();
+            Log.d (TAG, "bundle(" + key + "): " + value);
+        }
 
         // Get the Handler instance from the main thread
         Handler handler = new Handler(Looper.getMainLooper());
-        for (int i = 0; i < pdus.length; i++) {
-            byte[] pdu = (byte[]) pdus[i];
-            handler.post(new WorkerRunnable(context, pdu, format));
-        }
+        handler.post(new SmsStoreWorkerRunnable(context));
     }
 }

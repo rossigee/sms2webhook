@@ -2,50 +2,51 @@ package org.golder.sms2webhook;
 
 import android.content.Context;
 
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.FutureTask;
-
 import androidx.room.Room;
 
 public class DigestCache {
     private static volatile CacheDatabase INSTANCE;
 
-    public static void set(Context context, String key, String value) {
-        synchronized (CacheDatabase.class) {
-            if (INSTANCE == null) {
-                INSTANCE = Room.databaseBuilder(context.getApplicationContext(), CacheDatabase.class, "cache_database")
-                            .build();
-            }
-        }
-
-        INSTANCE.cacheDao().insert(new CacheEntry(key, value));
-    }
-
-    public static String get(Context context, String key) {
+    private static void checkInstance(Context context) {
         synchronized (CacheDatabase.class) {
             if (INSTANCE == null) {
                 INSTANCE = Room.databaseBuilder(context.getApplicationContext(), CacheDatabase.class, "cache_database")
                         .build();
             }
         }
+    }
 
-        return INSTANCE.cacheDao().get(key);
+    public static void set(Context context, String key, int value) {
+        checkInstance(context);
+        INSTANCE.cacheDao().insert(new CacheEntry(key, String.valueOf(value)));
+    }
+
+    public static int get(Context context, String key) {
+        checkInstance(context);
+        if(!INSTANCE.cacheDao().exists(key)) {
+            return -1;
+        }
+        return Integer.parseInt(INSTANCE.cacheDao().get(key));
+    }
+
+    public static int getSentCount(Context context) {
+        checkInstance(context);
+        return INSTANCE.cacheDao().getSent();
+    }
+
+    public static int getNotSentCount(Context context) {
+        checkInstance(context);
+        return INSTANCE.cacheDao().getNotSent();
     }
 
     public static void clear(Context context) {
-        synchronized (CacheDatabase.class) {
-            if (INSTANCE == null) {
-                INSTANCE = Room.databaseBuilder(context.getApplicationContext(), CacheDatabase.class, "cache_database")
-                        .build();
-            }
-        }
+        checkInstance(context);
 
-       FutureTask<String> future = new FutureTask<>(() -> {
-            INSTANCE.cacheDao().clear();
-            return null;
-        });
-        Executor executor = Executors.newSingleThreadExecutor();
-        executor.execute(future);
+        Runnable r = new Runnable() {
+            public void run() {
+                INSTANCE.cacheDao().clear();
+            }
+        };
+        new Thread(r).start();
     }
 }

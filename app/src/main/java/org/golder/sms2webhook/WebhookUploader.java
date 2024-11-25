@@ -1,19 +1,16 @@
 package org.golder.sms2webhook;
 
-import android.content.SharedPreferences;
 import android.util.Log;
 
-import org.apache.commons.lang3.StringUtils;
 import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.ProtocolException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-
-import androidx.preference.PreferenceManager;
 
 /**
  * Handles uploading data to a webhook URL.
@@ -49,8 +46,15 @@ public class WebhookUploader {
                 Log.e(TAG, "Error POSTing message: Status code " + String.valueOf(responseCode));
             }
             return responseCode;
-        } catch (Exception e) {
-            throw new WebhookUploadException("Unexpected error during upload: " + e.getMessage(), e);
+        } catch (ProtocolException e) {
+            Log.e(TAG, "ProtocolException POSTing message: " + e);
+            return -1;
+        } catch (MalformedURLException e) {
+            Log.e(TAG, "MalformedURLException POSTing message: " + e);
+            return -1;
+        } catch (IOException e) {
+            Log.e(TAG, "IOException POSTing message: " + e);
+            return -1;
         } finally {
             if (conn != null) {
                 conn.disconnect();

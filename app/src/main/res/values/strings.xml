@@ -10,5 +10,7 @@
     <string name="service_done">Service done</string>
     <string name="unable_to_load_cache">Unable to load cache</string>
     <string name="unable_to_save_cache">Unable to save cache</string>
-
+    <string name="retry_count">Retry count</string>
+    <string name="sent_count">Sent count</string>
+    <string name="store_count">Store count</string>
 </resources>

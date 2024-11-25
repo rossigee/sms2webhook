@@ -1,7 +1,6 @@
 package org.golder.sms2webhook;
 
 import android.os.Bundle;
-import android.util.Log;
 
 import androidx.preference.PreferenceFragmentCompat;
 

@@ -2,7 +2,6 @@ package org.golder.sms2webhook;
 
 import android.os.Bundle;
 import android.view.MenuItem;
-import android.widget.EditText;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;

@@ -6,43 +6,53 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <ProgressBar
-        android:id="@+id/progressBar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="322dp"
-        android:layout_height="46dp"
-        android:layout_marginTop="56dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/app_toolbar" />
+    <LinearLayout
+        android:layout_width="412dp"
+        android:layout_height="639dp"
+        android:gravity="center|top"
+        android:orientation="vertical"
+        android:translationY="60dp">
 
-    <ScrollView
-        android:id="@+id/scrollView"
-        android:layout_width="324dp"
-        android:layout_height="499dp"
-        android:scrollbars="vertical"
-
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.517"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/progressBar"
-        app:layout_constraintVertical_bias="0.253">
+        <ProgressBar
+            android:id="@+id/progressBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="360dp"
+            android:layout_height="50dp" />
 
         <TextView
-            android:id="@+id/textView"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:fillViewport="true"
-            android:text="@string/activity_logs"
+            android:id="@+id/storeCountTextView"
+            android:layout_width="360dp"
+            android:layout_height="75dp"
+            android:text="@string/store_count"
+            android:textSize="24sp" />
 
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="parent"
-            app:layout_constraintVertical_bias="0.5" />
+        <TextView
+            android:id="@+id/sentCountTextView"
+            android:layout_width="360dp"
+            android:layout_height="75dp"
+            android:text="@string/sent_count"
+            android:textSize="24sp" />
 
-    </ScrollView>
+        <TextView
+            android:id="@+id/retryCountTextView"
+            android:layout_width="360dp"
+            android:layout_height="75dp"
+            android:text="@string/retry_count"
+            android:textSize="24sp" />
+
+        <ScrollView
+            android:id="@+id/scrollView"
+            android:layout_width="380dp"
+            android:layout_height="320dp">
+
+            <TextView
+                android:id="@+id/textView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/activity_logs" />
+        </ScrollView>
+
+    </LinearLayout>
 
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/app_toolbar"
