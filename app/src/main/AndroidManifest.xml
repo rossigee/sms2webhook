@@ -36,11 +36,6 @@
             android:parentActivityName=".MainActivity"
             android:exported="false" />
 
-<!--        &lt;!&ndash; Service for uploading SMS data &ndash;&gt;-->
-<!--        <service-->
-<!--            android:name=".SmsUploadService"-->
-<!--            android:exported="false" />-->
-
         <!-- Broadcast receiver for receiving SMS data -->
         <receiver
             android:name=".SmsBroadcastReceiver"
