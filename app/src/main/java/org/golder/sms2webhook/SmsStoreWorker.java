@@ -68,28 +68,27 @@ public class SmsStoreWorker extends Worker {
         if(total == 0) {
             Log.i(TAG, "Empty SMS inbox.");
             app.addMessage("Empty SMS inbox.");
-            app.updateUI();
+            app.updateStats();
             return Result.success();
         }
 
         // Move cursor to watermark
-        int watermark = prefs.getInt("watermark", 0);
-        if(watermark > total) {
-            watermark = total;
+        if(app.watermark > total) {
+            app.watermark = total;
         }
 
-        while(watermark < total) {
-            String ref = "[" + (watermark + 1) + " / " + total + "]";
+        while(app.watermark < total) {
+            String ref = "[" + (app.watermark + 1) + " / " + total + "]";
             Log.i(TAG, app.getString(R.string.processing, ref));
-//            app.addMessage("Processing " + (watermark + 1) + " / " + total);
+//            app.addMessage("Processing " + (app.watermark + 1) + " / " + total);
 //            String msgData = "";
 //            for (int idx = 0; idx < cursor.getColumnCount(); idx++) {
 //                Log.i(TAG, "idx(" + idx + "): name '" + cursor.getColumnName(idx) + "' = " + cursor.getString(idx));
 //            }
 
-            if (!cursor.moveToPosition(watermark)) {
-                Log.e(TAG, "Unable to move cursor to watermark position " + watermark);
-                app.addMessage("ERROR: Unable to move cursor to watermark position " + watermark);
+            if (!cursor.moveToPosition(app.watermark)) {
+                Log.e(TAG, app.getString(R.string.unable_to_move_cursor_to_watermark_position, app.watermark));
+                app.addMessage(app.getString(R.string.unable_to_move_cursor_to_watermark_position, app.watermark));
                 return Result.failure();
             }
 
@@ -112,22 +111,26 @@ public class SmsStoreWorker extends Worker {
                 int statusCode = 0;
                 try {
                     statusCode = uploader.upload(json);
-                    Log.i(TAG, app.getString(R.string.uploaded_to_web_hook_with_status_code, statusCode));
-                    app.addMessage(ref + ": " + app.getString(R.string.uploaded_to_web_hook_with_status_code, statusCode));
+                    if(statusCode == HttpURLConnection.HTTP_OK) {
+                        Log.i(TAG, app.getString(R.string.uploaded_with_status_code, statusCode));
+                        app.addMessage(ref + ": " + app.getString(R.string.uploaded_with_status_code, statusCode));
+                    } else {
+                        Log.i(TAG, app.getString(R.string.failed_with_status_code, statusCode));
+                        app.addMessage(ref + ": " + app.getString(R.string.failed_with_status_code, statusCode));
+                    }
                 } catch (WebhookUploader.WebhookUploadException e) {
                     throw new RuntimeException(e);
                 }
                 DigestCache.set(context, hash, statusCode);
             }
 
-            app.
-            watermark += 1;
+            app.setWatermark(app.watermark + 1);
         }
 
         SharedPreferences.Editor editor = prefs.edit();
-        editor.putInt("watermark", watermark);
+        editor.putInt("watermark", app.watermark);
         editor.apply();
-        app.updateUI();
+        app.updateStats();
 
         return Result.success();
     }

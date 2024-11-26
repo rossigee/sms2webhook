@@ -37,7 +37,7 @@ public class MainActivity extends AppCompatActivity {
                 if (grantResults[i] == PackageManager.PERMISSION_DENIED) {
                     // If any of the permissions are denied, do something
                     Log.e(TAG, "Permission: " + permissions[i] + " was denied.");
-                    ((MainApplication)getApplication()).addMessage("ERROR: Permission: " + permissions[i] + " was denied.");
+                    ((MainApplication) getApplication()).addMessage("ERROR: Permission: " + permissions[i] + " was denied.");
                 }
             }
         }
@@ -48,20 +48,20 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         // Allow main application to add messages to message panel
-        MainApplication mainApplication = (MainApplication)getApplication();
+        MainApplication mainApplication = (MainApplication) getApplication();
         mainApplication.setMainActivity(this);
 
         // Check/acquire permissions
-        if(checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager. PERMISSION_DENIED) {
+        if (checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_DENIED) {
             requestPermissions(
-                new String[]{
-                    Manifest.permission.RECEIVE_SMS,
-                    Manifest.permission.READ_SMS
-                },
-                PERMISSION_REQUEST_CODE
+                    new String[]{
+                            Manifest.permission.RECEIVE_SMS,
+                            Manifest.permission.READ_SMS
+                    },
+                    PERMISSION_REQUEST_CODE
             );
             return;
-            }
+        }
 
         setContentView(R.layout.activity_main);
 
@@ -69,7 +69,9 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
 
         mainApplication.addMessage(getString(R.string.started_main_activity));
-        updateUI(getApplicationContext());
+        mainApplication.restoreMessages();
+
+        mainApplication.updateStats();
     }
 
     @Override
@@ -91,18 +93,29 @@ public class MainActivity extends AppCompatActivity {
 
         if (id == R.id.action_refresh) {
             Log.d(TAG, "Refresh button pressed");
-            Context ctx = getApplicationContext();
-            setWatermark(ctx, 0);
+
+            // Reset watermark to zero
+            MainApplication app = (MainApplication) getApplication();
+            app.setWatermark(0);
+            app.updateStats();
+
+            // Run store worker
             Handler handler = new Handler(Looper.getMainLooper());
+            Context ctx = getApplicationContext();
             return handler.post(new SmsStoreWorkerRunnable(ctx));
         }
 
         if (id == R.id.action_clear_cache) {
             Log.d(TAG, "Clear button pressed");
+
+            // Reset watermark to zero
+            MainApplication app = (MainApplication) getApplication();
+            app.setWatermark(0);
+
+            // Clear cache
             Context ctx = getApplicationContext();
-            setWatermark(ctx, 0);
             DigestCache.clear(ctx);
-            updateUI(ctx);
+            app.updateStats();
             return true;
         }
 
@@ -121,30 +134,14 @@ public class MainActivity extends AppCompatActivity {
         editor.apply();
     }
 
-    public void updateUI(Context ctx) {
-        new Thread(() -> {
-            SmsRepository.Status status = SmsRepository.fetchStatus(ctx);
+    public void restoreMessages() {
+        MainApplication app = (MainApplication) getApplication();
 
-            runOnUiThread(() -> {
-                TextView storeCountTextView = findViewById(R.id.storeCountTextView);
-                storeCountTextView.setText(getString(R.string.store_count, status.inboxCount));
-
-                TextView sentCountTextView = findViewById(R.id.sentCountTextView);
-                sentCountTextView.setText(getString(R.string.sent_count, status.processedCount));
-
-                TextView unsentCountTextView = findViewById(R.id.unsentCountTextView);
-                unsentCountTextView.setText(getString(R.string.retry_count, status.retryCount));
-
-                ProgressBar progressBar = findViewById(R.id.progressBar);
-                progressBar.setMin(0);
-                progressBar.setMax(100);
-                progressBar.setProgress(100 * (status.processedCount / status.inboxCount));
-
-                TextView activityLogTextView = findViewById(R.id.textView);
-                String[] messages = status.messages;
-                activityLogTextView.setText(String.join("\n", messages));
-            });
-        }).start();
+        runOnUiThread(() -> {
+            TextView activityLogTextView = findViewById(R.id.textView);
+            String[] messages = app.getMessages();
+            activityLogTextView.setText(String.join("\n", messages) + "\n");
+        });
     }
 
     public void addMessage(String line) {
@@ -155,6 +152,26 @@ public class MainActivity extends AppCompatActivity {
             scrollView.post(() -> {
                 scrollView.fullScroll(scrollView.FOCUS_DOWN);
             });
+        });
+    }
+
+    public void updateStats(Context ctx) {
+        MainApplication app = (MainApplication) getApplication();
+
+        runOnUiThread(() -> {
+            TextView storeCountTextView = findViewById(R.id.storeCountTextView);
+            storeCountTextView.setText(getString(R.string.store_count, app.inboxCount));
+
+            TextView sentCountTextView = findViewById(R.id.sentCountTextView);
+            sentCountTextView.setText(getString(R.string.sent_count, app.sentCount));
+
+            TextView unsentCountTextView = findViewById(R.id.unsentCountTextView);
+            unsentCountTextView.setText(getString(R.string.retry_count, app.unsentCount));
+
+            ProgressBar progressBar = findViewById(R.id.progressBar);
+            progressBar.setMin(0);
+            progressBar.setMax(100);
+            progressBar.setProgress(Math.round(app.watermark * 100 / app.inboxCount));
         });
     }
 }
