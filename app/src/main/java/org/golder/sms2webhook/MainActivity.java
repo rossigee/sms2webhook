@@ -13,8 +13,10 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.preference.PreferenceManager;
@@ -25,14 +27,8 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int PERMISSION_REQUEST_CODE = 1;
 
-    private DigestCache cache;
-
-    // UI components
-    private TextView activityLogTextView;
-    private ProgressBar progressBar;
-
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
         // Check if a permission was requested and granted
@@ -56,19 +52,23 @@ public class MainActivity extends AppCompatActivity {
         mainApplication.setMainActivity(this);
 
         // Check/acquire permissions
-        requestPermissions(
-            new String[]{
-                Manifest.permission.RECEIVE_SMS,
-                Manifest.permission.READ_SMS
-            },
-            PERMISSION_REQUEST_CODE
-        );
+        if(checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager. PERMISSION_DENIED) {
+            requestPermissions(
+                new String[]{
+                    Manifest.permission.RECEIVE_SMS,
+                    Manifest.permission.READ_SMS
+                },
+                PERMISSION_REQUEST_CODE
+            );
+            return;
+            }
 
         setContentView(R.layout.activity_main);
 
         Toolbar toolbar = findViewById(R.id.app_toolbar);
         setSupportActionBar(toolbar);
 
+        mainApplication.addMessage(getString(R.string.started_main_activity));
         updateUI(getApplicationContext());
     }
 
@@ -92,7 +92,7 @@ public class MainActivity extends AppCompatActivity {
         if (id == R.id.action_refresh) {
             Log.d(TAG, "Refresh button pressed");
             Context ctx = getApplicationContext();
-            clearWatermark(ctx);
+            setWatermark(ctx, 0);
             Handler handler = new Handler(Looper.getMainLooper());
             return handler.post(new SmsStoreWorkerRunnable(ctx));
         }
@@ -100,8 +100,8 @@ public class MainActivity extends AppCompatActivity {
         if (id == R.id.action_clear_cache) {
             Log.d(TAG, "Clear button pressed");
             Context ctx = getApplicationContext();
-            clearWatermark(ctx);
-            cache.clear(ctx);
+            setWatermark(ctx, 0);
+            DigestCache.clear(ctx);
             updateUI(ctx);
             return true;
         }
@@ -114,54 +114,47 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    private void clearWatermark(Context ctx) {
+    private void setWatermark(Context ctx, int value) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ctx);
         SharedPreferences.Editor editor = prefs.edit();
-        editor.putInt("watermark", 0);
+        editor.putInt("watermark", value);
         editor.apply();
     }
 
     public void updateUI(Context ctx) {
-        Runnable r = new Runnable() {
-            @Override
-            public void run() {
-                SmsRepository.Status status = SmsRepository.fetchStatus(ctx);
+        new Thread(() -> {
+            SmsRepository.Status status = SmsRepository.fetchStatus(ctx);
 
+            runOnUiThread(() -> {
                 TextView storeCountTextView = findViewById(R.id.storeCountTextView);
-                storeCountTextView.setText("Store count" + " : " + status.inboxCount);
+                storeCountTextView.setText(getString(R.string.store_count, status.inboxCount));
 
                 TextView sentCountTextView = findViewById(R.id.sentCountTextView);
-                sentCountTextView.setText("Sent count" + " : " + status.processedCount);
+                sentCountTextView.setText(getString(R.string.sent_count, status.processedCount));
 
-                TextView retryCountTextView = findViewById(R.id.retryCountTextView);
-                retryCountTextView.setText("Retry count" + " : " + status.retryCount);
+                TextView unsentCountTextView = findViewById(R.id.unsentCountTextView);
+                unsentCountTextView.setText(getString(R.string.retry_count, status.retryCount));
 
-                progressBar = findViewById(R.id.progressBar);
+                ProgressBar progressBar = findViewById(R.id.progressBar);
                 progressBar.setMin(0);
                 progressBar.setMax(100);
                 progressBar.setProgress(100 * (status.processedCount / status.inboxCount));
 
-                Runnable r2 = new Runnable() {
-                    @Override
-                    public void run() {
-                        TextView activityLogTextView = findViewById(R.id.textView);
-                        String[] messages = status.messages;
-                        activityLogTextView.setText(String.join("\n", messages));
-                    }
-                };
-                runOnUiThread(r2);
-            }
-        };
-        new Thread(r).start();
+                TextView activityLogTextView = findViewById(R.id.textView);
+                String[] messages = status.messages;
+                activityLogTextView.setText(String.join("\n", messages));
+            });
+        }).start();
     }
 
-    public void addMessage(Context ctx, String line) {
-        Runnable r = new Runnable() {
-            public void run() {
-                TextView activityLogTextView = findViewById(R.id.textView);
-                activityLogTextView.append(line + "\n");
-            }
-        };
-        runOnUiThread(r);
+    public void addMessage(String line) {
+        runOnUiThread(() -> {
+            TextView activityLogTextView = findViewById(R.id.textView);
+            activityLogTextView.append(line + "\n");
+            ScrollView scrollView = findViewById(R.id.scrollView);
+            scrollView.post(() -> {
+                scrollView.fullScroll(scrollView.FOCUS_DOWN);
+            });
+        });
     }
 }

@@ -79,16 +79,17 @@ public class SmsStoreWorker extends Worker {
         }
 
         while(watermark < total) {
-            Log.i(TAG, "Processing " + (watermark + 1) + " / " + total);
-            app.addMessage("Processing " + (watermark + 1) + " / " + total);
+            String ref = "[" + (watermark + 1) + " / " + total + "]";
+            Log.i(TAG, app.getString(R.string.processing, ref));
+//            app.addMessage("Processing " + (watermark + 1) + " / " + total);
 //            String msgData = "";
 //            for (int idx = 0; idx < cursor.getColumnCount(); idx++) {
 //                Log.i(TAG, "idx(" + idx + "): name '" + cursor.getColumnName(idx) + "' = " + cursor.getString(idx));
 //            }
-//
+
             if (!cursor.moveToPosition(watermark)) {
                 Log.e(TAG, "Unable to move cursor to watermark position " + watermark);
-                app.addMessage("Unable to move cursor to watermark position " + watermark);
+                app.addMessage("ERROR: Unable to move cursor to watermark position " + watermark);
                 return Result.failure();
             }
 
@@ -100,10 +101,10 @@ public class SmsStoreWorker extends Worker {
             } catch (NoSuchAlgorithmException e) {
                 throw new RuntimeException(e);
             }
-            Log.i(TAG, "Looking up msghash " + hash + "...");
+            Log.d(TAG, "Looking up msghash " + hash + "...");
             if (DigestCache.get(context, hash) == HttpURLConnection.HTTP_OK) {
                 Log.i(TAG, "Already successfully sent msghash " + hash + ". Skipping.");
-                app.addMessage("Already successfully sent msghash " + hash + ". Skipping.");
+                app.addMessage(ref + ": " + "Already sent. Skipping.");
             }
             else {
                 // Upload and record status code against digest in cache
@@ -111,14 +112,15 @@ public class SmsStoreWorker extends Worker {
                 int statusCode = 0;
                 try {
                     statusCode = uploader.upload(json);
-                    Log.i(TAG, "Uploaded to web hook with status code: " + statusCode);
-                    app.addMessage("Uploaded to web hook with status code: " + statusCode);
+                    Log.i(TAG, app.getString(R.string.uploaded_to_web_hook_with_status_code, statusCode));
+                    app.addMessage(ref + ": " + app.getString(R.string.uploaded_to_web_hook_with_status_code, statusCode));
                 } catch (WebhookUploader.WebhookUploadException e) {
                     throw new RuntimeException(e);
                 }
                 DigestCache.set(context, hash, statusCode);
-                app.updateUI();
             }
+
+            app.
             watermark += 1;
         }
 

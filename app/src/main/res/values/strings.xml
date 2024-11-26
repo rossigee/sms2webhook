@@ -6,11 +6,11 @@
     <string name="action_clear_cache">Clear cache</string>
     <string name="action_quit">Quit</string>
     <string name="activity_logs">Activity logs…</string>
-    <string name="service_starting">Service starting…</string>
-    <string name="service_done">Service done</string>
-    <string name="unable_to_load_cache">Unable to load cache</string>
-    <string name="unable_to_save_cache">Unable to save cache</string>
-    <string name="retry_count">Retry count</string>
-    <string name="sent_count">Sent count</string>
-    <string name="store_count">Store count</string>
+    <string name="retry_count">Unsent: %d</string>
+    <string name="sent_count">Sent: %d</string>
+    <string name="store_count">Store: %d</string>
+    <string name="started_main_activity">Started main activity...</string>
+    <string name="received_sms_from_s">Received SMS from %s</string>
+    <string name="processing">"Processing %s"</string>
+    <string name="uploaded_to_web_hook_with_status_code">Uploaded to web hook with status code: %d</string>
 </resources>

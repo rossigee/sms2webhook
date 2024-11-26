@@ -6,7 +6,10 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.telephony.SmsMessage;
 import android.util.Log;
+
+import static android.provider.Settings.System.getString;
 
 public class SmsBroadcastReceiver extends BroadcastReceiver {
     private static final String TAG = SmsBroadcastReceiver.class.getSimpleName();
@@ -33,15 +36,22 @@ public class SmsBroadcastReceiver extends BroadcastReceiver {
             Log.w(TAG, "No SMS PDUs found.");
             return;
         }
-
         String format = (String) bundle.get("format");
         Log.d(TAG, "Incoming message bundle in '" + format + "' format.");
 
         // Print all fields of the bundle
-        for (String key: bundle.keySet()) {
-            String value = (bundle.get(key)).toString();
-            Log.d (TAG, "bundle(" + key + "): " + value);
-        }
+//        for (String key: bundle.keySet()) {
+//            String value = (bundle.get(key)).toString();
+//            Log.d (TAG, "bundle(" + key + "): " + value);
+//        }
+
+        // Determine sender
+        SmsMessage sms = SmsMessage.createFromPdu((byte[])pdus[0], format);
+        String sender = sms.getDisplayOriginatingAddress();
+
+        // Log receipt in activity view
+        MainApplication app = (MainApplication)context.getApplicationContext();
+        app.addMessage(context.getString(R.string.received_sms_from_s, sender));
 
         // Get the Handler instance from the main thread
         Handler handler = new Handler(Looper.getMainLooper());
