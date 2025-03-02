@@ -15,4 +15,5 @@
     <string name="unable_to_move_cursor_to_watermark_position">Unable to move cursor to watermark position %d</string>
     <string name="uploaded_with_status_code">Uploaded (status code: %d)</string>
     <string name="failed_with_status_code">Failed (status code: %d)</string>
+    <string name="api_key">API key</string>
 </resources>

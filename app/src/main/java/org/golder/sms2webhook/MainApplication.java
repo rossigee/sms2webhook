@@ -28,8 +28,10 @@ public class MainApplication extends Application {
 
         Context ctx = getApplicationContext();
 
-        Cursor cursor = getContentResolver().query(Telephony.Sms.CONTENT_URI, null, null, null, "_id");
-        inboxCount = cursor.getCount();
+        try (Cursor cursor = getContentResolver().query(Telephony.Sms.CONTENT_URI, null, null, null, "_id")) {
+            assert cursor != null;
+            inboxCount = cursor.getCount();
+        }
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ctx);
         watermark = prefs.getInt("watermark", 0);

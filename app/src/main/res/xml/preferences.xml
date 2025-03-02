@@ -5,6 +5,9 @@
         <EditTextPreference
             android:key="webhook_url"
             android:title="@string/webhook_url" />
+        <EditTextPreference
+            android:key="api_key"
+            android:title="@string/api_key" />
 
     </PreferenceCategory>
 

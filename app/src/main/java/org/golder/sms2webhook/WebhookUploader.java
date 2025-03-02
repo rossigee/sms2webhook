@@ -19,9 +19,11 @@ public class WebhookUploader {
     private static final String TAG = WebhookUploader.class.getSimpleName();
 
     private String webhookUrl;
+    private String apiKey;
 
-    public WebhookUploader(String url) {
-        webhookUrl = url;
+    public WebhookUploader(String url, String apiKey) {
+        this.webhookUrl = url;
+        this.apiKey = apiKey;
     }
 
     /**
@@ -36,6 +38,7 @@ public class WebhookUploader {
             conn = getHttpURLConnection(webhookUrl);
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json; utf-8");
+            conn.setRequestProperty("Authorization", String.format("Bearer %s", apiKey));
             conn.setDoOutput(true);
             byte[] input = msg.toString().getBytes(StandardCharsets.UTF_8);
             try (OutputStream os = conn.getOutputStream()) {

@@ -61,6 +61,12 @@ public class SmsStoreWorker extends Worker {
             app.addMessage("ERROR: Webhook URL not defined.");
             return Result.failure();
         }
+        String apiKey = prefs.getString("api_key", "");
+        if(apiKey.equals("")) {
+            Log.e(TAG, "API key not defined.");
+            app.addMessage("ERROR: API key not defined.");
+            return Result.failure();
+        }
 
         Cursor cursor = context.getContentResolver().query(Telephony.Sms.CONTENT_URI, null, null, null, "_id");
         int total = cursor.getCount();
@@ -107,7 +113,7 @@ public class SmsStoreWorker extends Worker {
             }
             else {
                 // Upload and record status code against digest in cache
-                WebhookUploader uploader = new WebhookUploader(webhookUrl);
+                WebhookUploader uploader = new WebhookUploader(webhookUrl, apiKey);
                 int statusCode = 0;
                 try {
                     statusCode = uploader.upload(json);
