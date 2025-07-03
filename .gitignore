@@ -34,3 +34,9 @@ amplifytools.xcconfig
 .secret-*
 **.sample
 #amplify-do-not-edit-end
+
+# Keystore files - NEVER commit these!
+*.jks
+*.keystore
+*.p12
+release-keystore.*
