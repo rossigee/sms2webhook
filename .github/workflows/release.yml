@@ -56,6 +56,7 @@ jobs:
           keyPassword: ${{ secrets.KEY_PASSWORD }}
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
+          JAVA_TOOL_OPTIONS: "-Djava.security.properties=/dev/null"
 
       - name: Rename APKs
         run: |
