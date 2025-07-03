@@ -6,9 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SMS2Webhook is an Android application that monitors incoming SMS messages and forwards them to a configured webhook endpoint. The app maintains a local cache using Room database to track processed messages and prevent duplicates.
 
+## Version 2.0.0 Updates (Current)
+
+### Major Improvements
+- **MVVM Architecture**: Complete refactor to use ViewModels and LiveData
+- **Material Design 3**: Full MD3 theming with proper color schemes
+- **Modern UI**: RecyclerView for logs, SwipeRefreshLayout, proper ConstraintLayout
+- **Error Handling**: Comprehensive try-catch blocks to prevent crashes
+- **Threading**: All database operations moved off main thread
+- **Compatibility**: Lowered minSdk from 34 to 28 for broader device support
+
 ## Build and Development Commands
 
 ```bash
+# Set Java 17 for building
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
 # Build the app
 ./gradlew build
 
@@ -23,6 +36,9 @@ SMS2Webhook is an Android application that monitors incoming SMS messages and fo
 
 # Generate signed APK
 ./gradlew assembleRelease
+
+# Debug installation script (includes logcat monitoring)
+./debug_install.sh
 ```
 
 ## Architecture Overview
@@ -51,9 +67,10 @@ SMS2Webhook is an Android application that monitors incoming SMS messages and fo
 
 ### UI Structure
 
-- **MainActivity**: Main screen with activity log, statistics, and sync controls
-- **SettingsActivity/Fragment**: Configuration for webhook URL and API key
-- Uses deprecated UI patterns (should be modernized with MVVM)
+- **MainActivity**: Main screen with activity log, statistics, and sync controls (MVVM pattern)
+- **MainViewModel**: Handles UI state and business logic for MainActivity
+- **SettingsActivity/Fragment**: Configuration for webhook URL, API key, and test connection
+- **LogAdapter**: RecyclerView adapter for displaying color-coded log entries
 
 ## Key Implementation Details
 
@@ -77,26 +94,31 @@ SMS2Webhook is an Android application that monitors incoming SMS messages and fo
 ```
 
 ### Critical Files
-- Permissions handling: MainActivity.java:123-169
+- Permissions handling: MainActivity.java:44-94
 - SMS reading logic: SmsStoreWorkerRunnable.java:88-159
 - Webhook upload: WebhookUploader.java:17-98
 - Database schema: CacheDatabase.java:15-25
+- ViewModel implementation: MainViewModel.java
+- Error handling: MainApplication.java:26-61
 
 ## Development Guidelines
 
-### Current Issues to Address
-1. **UI Modernization**: Replace hard-coded dimensions with ConstraintLayout constraints
-2. **Architecture**: Implement MVVM pattern with ViewModels and LiveData
-3. **Material Design**: Add proper theming (currently empty theme files)
-4. **Performance**: Move database operations off main thread
-5. **Error Handling**: Improve user feedback for failures
+### Recently Resolved Issues (v2.0.0)
+1. ✅ **UI Modernization**: Implemented proper ConstraintLayout with RecyclerView
+2. ✅ **Architecture**: Full MVVM pattern with ViewModels and LiveData
+3. ✅ **Material Design**: Complete MD3 theming with color schemes
+4. ✅ **Performance**: All database operations moved off main thread
+5. ✅ **Error Handling**: Comprehensive try-catch blocks and user feedback
+6. ✅ **Pixel 8 Crash**: Fixed by lowering minSdk to 28 and adding error handling
 
 ### When Making Changes
-- Maintain compatibility with Android SDK 34+ (minSdk)
+- Maintain compatibility with Android SDK 28+ (minSdk lowered for device compatibility)
 - Preserve SMS permission handling flow (critical for app function)
 - Keep webhook format consistent unless coordinating backend changes
 - Test with both single and dual SIM devices
 - Ensure background processing works with Android's battery optimizations
+- Always wrap initialization code in try-catch blocks to prevent crashes
+- Use Java 17 for building (set JAVA_HOME if needed)
 
 ### Testing Considerations
 - No existing tests - consider adding when implementing new features
@@ -104,3 +126,69 @@ SMS2Webhook is an Android application that monitors incoming SMS messages and fo
 - Verify behavior with large SMS volumes
 - Test webhook failures and retry logic
 - Validate duplicate detection works correctly
+- Use debug_install.sh script to capture crash logs from devices
+- Test on physical devices (especially Pixel phones) in addition to emulators
+
+### Known Device Compatibility
+- ✅ Android emulators (API 28+)
+- ✅ Pixel 8 (after minSdk and error handling fixes)
+- ⚠️ Requires SMS permissions to be granted manually on first run
+
+## CI/CD and Release Process
+
+### GitHub Actions Workflows
+
+1. **release.yml** - Main release workflow triggered on version tags
+   - Builds both debug and release APKs
+   - Signs release APK using GitHub secrets
+   - Creates GitHub release with changelog
+   - Uploads both APKs as release artifacts
+
+2. **sign-apk-manual.yml** - Alternative manual signing workflow
+   - Handles keystore format conversion automatically
+   - Uses apksigner directly instead of GitHub Action
+   - More robust against keystore format issues
+
+3. **test-keystore.yml** - Diagnostic workflow for keystore issues
+   - Tests keystore format and compatibility
+   - Attempts automatic conversion to PKCS12
+   - Outputs fixed keystore in base64 if successful
+
+### APK Signing Setup
+
+**IMPORTANT**: Never commit keystore files to the repository!
+
+1. Generate a keystore (if needed):
+```bash
+keytool -genkey -v \
+  -keystore release-keystore.jks \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000 \
+  -alias release-key \
+  -storetype PKCS12
+```
+
+2. Convert keystore to base64:
+```bash
+base64 release-keystore.jks
+```
+
+3. Add GitHub Secrets (Settings → Secrets and variables → Actions):
+   - `SIGNING_KEY`: Base64-encoded keystore file
+   - `ALIAS`: Key alias (e.g., "release-key")
+   - `KEY_STORE_PASSWORD`: Keystore password
+   - `KEY_PASSWORD`: Key password (often same as keystore password)
+
+### Keystore Troubleshooting
+
+If you encounter "Tag number over 30 is not supported" errors:
+1. Run the test-keystore.yml workflow to diagnose
+2. Consider regenerating the keystore in PKCS12 format
+3. Use the manual signing workflow as a fallback
+
+The `.gitignore` file is configured to exclude all keystore files:
+- `*.jks`
+- `*.keystore`
+- `*.p12`
+- `release-keystore.*`
