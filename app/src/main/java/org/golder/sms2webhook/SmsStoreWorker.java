@@ -22,7 +22,7 @@ import androidx.work.WorkerParameters;
 public class SmsStoreWorker extends Worker {
     private static final String TAG = SmsStoreWorker.class.getSimpleName();
 
-    private Context context;
+    private final Context context;
 
     public SmsStoreWorker(@NonNull Context context, @NonNull WorkerParameters parameters) {
         super(context, parameters);
@@ -70,7 +70,7 @@ public class SmsStoreWorker extends Worker {
 
         Cursor cursor = context.getContentResolver().query(Telephony.Sms.CONTENT_URI, null, null, null, "_id");
         int total = cursor.getCount();
-        Log.i(TAG, "SMS message count: " + String.valueOf(total));
+        Log.i(TAG, "SMS message count: " + total);
         if(total == 0) {
             Log.i(TAG, "Empty SMS inbox.");
             app.addMessage("Empty SMS inbox.");

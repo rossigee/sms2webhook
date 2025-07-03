@@ -19,7 +19,7 @@ public class MainViewModel extends AndroidViewModel {
     
     private final List<LogEntry> logList = new ArrayList<>();
     private final Executor backgroundExecutor = Executors.newFixedThreadPool(2);
-    private CacheDatabase cacheDatabase;
+    private final CacheDatabase cacheDatabase;
 
     public MainViewModel(@NonNull Application application) {
         super(application);
@@ -61,7 +61,7 @@ public class MainViewModel extends AndroidViewModel {
         isLoading.setValue(true);
         backgroundExecutor.execute(() -> {
             try {
-                MainApplication app = (MainApplication) getApplication();
+                MainApplication app = getApplication();
                 int totalCount = app.inboxCount;
                 int sentCount = app.sentCount;
                 int unsentCount = app.unsentCount;
@@ -86,7 +86,7 @@ public class MainViewModel extends AndroidViewModel {
             int sentCount = cacheDatabase.cacheDao().getSent();
             int unsentCount = cacheDatabase.cacheDao().getNotSent();
             
-            MainApplication app = (MainApplication) getApplication();
+            MainApplication app = getApplication();
             int storeCount = app.inboxCount;
             
             // Check for duplicates

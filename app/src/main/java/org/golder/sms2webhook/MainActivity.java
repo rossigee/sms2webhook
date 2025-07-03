@@ -60,31 +60,37 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Initialize ViewModel
-        viewModel = new ViewModelProvider(this).get(MainViewModel.class);
+        try {
+            // Initialize ViewModel
+            viewModel = new ViewModelProvider(this).get(MainViewModel.class);
 
-        // Allow main application to add messages to message panel
-        MainApplication mainApplication = (MainApplication) getApplication();
-        mainApplication.setMainActivity(this);
+            // Allow main application to add messages to message panel
+            MainApplication mainApplication = (MainApplication) getApplication();
+            mainApplication.setMainActivity(this);
 
-        // Check/acquire permissions
-        if (checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_DENIED) {
-            requestPermissions(
-                    new String[]{
-                            Manifest.permission.RECEIVE_SMS,
-                            Manifest.permission.READ_SMS
-                    },
-                    PERMISSION_REQUEST_CODE
-            );
-            return;
+            // Check/acquire permissions
+            if (checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_DENIED) {
+                requestPermissions(
+                        new String[]{
+                                Manifest.permission.RECEIVE_SMS,
+                                Manifest.permission.READ_SMS
+                        },
+                        PERMISSION_REQUEST_CODE
+                );
+                return;
+            }
+
+            setContentView(R.layout.activity_main);
+            initializeViews();
+            setupObservers();
+
+            viewModel.addLogEntry(getString(R.string.started_main_activity), MainViewModel.LogEntry.Type.INFO);
+            viewModel.loadStatistics();
+        } catch (Exception e) {
+            Log.e(TAG, "Error in onCreate: " + e.getMessage(), e);
+            // Show error to user
+            Toast.makeText(this, "Failed to initialize app: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
-
-        setContentView(R.layout.activity_main);
-        initializeViews();
-        setupObservers();
-
-        viewModel.addLogEntry(getString(R.string.started_main_activity), MainViewModel.LogEntry.Type.INFO);
-        viewModel.loadStatistics();
     }
 
     private void initializeViews() {

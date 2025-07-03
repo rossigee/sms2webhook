@@ -28,17 +28,35 @@ public class MainApplication extends Application {
 
         Context ctx = getApplicationContext();
 
-        try (Cursor cursor = getContentResolver().query(Telephony.Sms.CONTENT_URI, null, null, null, "_id")) {
-            assert cursor != null;
-            inboxCount = cursor.getCount();
+        try {
+            try (Cursor cursor = getContentResolver().query(Telephony.Sms.CONTENT_URI, null, null, null, "_id")) {
+                if (cursor != null) {
+                    inboxCount = cursor.getCount();
+                }
+            }
+        } catch (Exception e) {
+            // If SMS access fails, just log and continue
+            android.util.Log.e("MainApplication", "Failed to query SMS: " + e.getMessage());
+            inboxCount = 0;
         }
 
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ctx);
-        watermark = prefs.getInt("watermark", 0);
+        try {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ctx);
+            watermark = prefs.getInt("watermark", 0);
+        } catch (Exception e) {
+            android.util.Log.e("MainApplication", "Failed to get preferences: " + e.getMessage());
+            watermark = 0;
+        }
 
         new Thread(() -> {
-            sentCount = DigestCache.getSentCount(ctx);
-            unsentCount = DigestCache.getNotSentCount(ctx);
+            try {
+                sentCount = DigestCache.getSentCount(ctx);
+                unsentCount = DigestCache.getNotSentCount(ctx);
+            } catch (Exception e) {
+                android.util.Log.e("MainApplication", "Failed to get cache counts: " + e.getMessage());
+                sentCount = 0;
+                unsentCount = 0;
+            }
         }).start();
     }
 
