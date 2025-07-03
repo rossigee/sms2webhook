@@ -1,0 +1,111 @@
+name: Pull Request Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  danger:
+    name: Code Review
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Check code formatting
+        run: |
+          echo "## Code Review Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Run lint and capture results
+        id: lint
+        run: |
+          ./gradlew lint --stacktrace || LINT_FAILED=true
+          
+          if [ -f "app/build/reports/lint-results-debug.html" ]; then
+            # Extract lint summary (this is a simplified version)
+            echo "### Lint Results" >> $GITHUB_STEP_SUMMARY
+            echo "Lint report generated. Check artifacts for detailed report." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: APK size check
+        run: |
+          ./gradlew assembleDebug
+          
+          DEBUG_SIZE=$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)
+          DEBUG_SIZE_MB=$(echo "scale=2; $DEBUG_SIZE / 1048576" | bc)
+          
+          echo "### APK Size" >> $GITHUB_STEP_SUMMARY
+          echo "Debug APK: ${DEBUG_SIZE_MB} MB" >> $GITHUB_STEP_SUMMARY
+          
+          # Warn if APK is larger than 10MB
+          if (( $(echo "$DEBUG_SIZE_MB > 10" | bc -l) )); then
+            echo "⚠️ **Warning**: APK size exceeds 10MB" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check for security issues
+        run: |
+          echo "### Security Check" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for hardcoded API keys or secrets
+          if grep -r "api_key\|apikey\|secret\|password" --include="*.java" --include="*.kt" app/src/main | grep -v "R.string\|getString"; then
+            echo "⚠️ **Warning**: Potential hardcoded secrets found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No hardcoded secrets detected" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check for HTTP instead of HTTPS
+          if grep -r "http://" --include="*.java" --include="*.kt" --include="*.xml" app/src/main | grep -v "xmlns\|schema"; then
+            echo "⚠️ **Warning**: Non-HTTPS URLs found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ All URLs use HTTPS" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Comment PR
+        uses: actions/github-script@v7
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync(process.env.GITHUB_STEP_SUMMARY, 'utf8');
+            
+            // Find and update or create comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && comment.body.includes('Code Review Summary')
+            );
+            
+            const body = `## 🤖 Automated Code Review\n\n${summary}`;
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }

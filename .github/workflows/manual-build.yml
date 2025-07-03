@@ -1,0 +1,130 @@
+name: Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+          - both
+      create_release:
+        description: 'Create GitHub release'
+        required: false
+        type: boolean
+        default: false
+      release_name:
+        description: 'Release name (if creating release)'
+        required: false
+        type: string
+
+jobs:
+  build:
+    name: Manual Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION_NAME=$(grep -oP 'versionName "\K[^"]+' app/build.gradle)
+          VERSION_CODE=$(grep -oP 'versionCode \K[0-9]+' app/build.gradle)
+          COMMIT_SHORT=$(git rev-parse --short HEAD)
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "COMMIT_SHORT=$COMMIT_SHORT" >> $GITHUB_OUTPUT
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_OUTPUT
+
+      - name: Build Debug APK
+        if: ${{ inputs.build_type == 'debug' || inputs.build_type == 'both' }}
+        run: |
+          ./gradlew assembleDebug --stacktrace
+          mv app/build/outputs/apk/debug/app-debug.apk sms2webhook-${{ steps.version.outputs.VERSION_NAME }}-debug-${{ steps.version.outputs.TIMESTAMP }}.apk
+
+      - name: Build Release APK
+        if: ${{ inputs.build_type == 'release' || inputs.build_type == 'both' }}
+        run: |
+          ./gradlew assembleRelease --stacktrace
+          mv app/build/outputs/apk/release/app-release.apk sms2webhook-${{ steps.version.outputs.VERSION_NAME }}-release-${{ steps.version.outputs.TIMESTAMP }}.apk
+
+      - name: Upload Debug APK
+        if: ${{ inputs.build_type == 'debug' || inputs.build_type == 'both' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sms2webhook-debug-manual-${{ steps.version.outputs.TIMESTAMP }}
+          path: sms2webhook-*-debug-*.apk
+          retention-days: 30
+
+      - name: Upload Release APK
+        if: ${{ inputs.build_type == 'release' || inputs.build_type == 'both' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sms2webhook-release-manual-${{ steps.version.outputs.TIMESTAMP }}
+          path: sms2webhook-*-release-*.apk
+          retention-days: 30
+
+      - name: Create Release
+        if: ${{ inputs.create_release }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: manual-${{ steps.version.outputs.VERSION_NAME }}-${{ steps.version.outputs.TIMESTAMP }}
+          name: ${{ inputs.release_name || format('Manual Build {0}', steps.version.outputs.TIMESTAMP) }}
+          body: |
+            ## Manual Build Release
+            
+            **Version**: ${{ steps.version.outputs.VERSION_NAME }} (code: ${{ steps.version.outputs.VERSION_CODE }})
+            **Commit**: ${{ steps.version.outputs.COMMIT_SHORT }}
+            **Build Type**: ${{ inputs.build_type }}
+            **Timestamp**: ${{ steps.version.outputs.TIMESTAMP }}
+            
+            This is a manual build triggered via GitHub Actions workflow dispatch.
+          files: |
+            sms2webhook-*.apk
+          draft: true
+          prerelease: true
+
+      - name: Build Summary
+        run: |
+          echo "## Manual Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ steps.version.outputs.VERSION_NAME }} (code: ${{ steps.version.outputs.VERSION_CODE }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: ${{ steps.version.outputs.COMMIT_SHORT }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Type**: ${{ inputs.build_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp**: ${{ steps.version.outputs.TIMESTAMP }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ inputs.build_type }}" == "debug" ] || [ "${{ inputs.build_type }}" == "both" ]; then
+            echo "✅ Debug APK built successfully" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ inputs.build_type }}" == "release" ] || [ "${{ inputs.build_type }}" == "both" ]; then
+            echo "✅ Release APK built successfully" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ inputs.create_release }}" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📦 Draft release created: ${{ inputs.release_name || 'Manual Build' }}" >> $GITHUB_STEP_SUMMARY
+          fi

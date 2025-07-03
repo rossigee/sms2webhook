@@ -1,13 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    
     <PreferenceCategory android:title="@string/action_settings">
 
         <EditTextPreference
             android:key="webhook_url"
-            android:title="@string/webhook_url" />
+            android:title="@string/webhook_url"
+            android:summary="@string/webhook_url_hint"
+            android:inputType="textUri"
+            android:selectAllOnFocus="true" />
+            
         <EditTextPreference
             android:key="api_key"
-            android:title="@string/api_key" />
+            android:title="@string/api_key"
+            android:summary="@string/api_key_hint"
+            android:inputType="textPassword"
+            android:selectAllOnFocus="true" />
+
+        <Preference
+            android:key="test_connection"
+            android:title="@string/test_connection"
+            android:summary="Test webhook connection"
+            android:icon="@android:drawable/ic_menu_send" />
 
     </PreferenceCategory>
 

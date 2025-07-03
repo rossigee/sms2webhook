@@ -1,2 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources/>
+<resources>
+    <!-- Material Design 3 Color Palette -->
+    <color name="primary">#2196F3</color>
+    <color name="primary_variant">#1976D2</color>
+    <color name="secondary">#03DAC6</color>
+    <color name="secondary_variant">#018786</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="background">#FAFAFA</color>
+    <color name="error">#F44336</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="on_secondary">#000000</color>
+    <color name="on_surface">#000000</color>
+    <color name="on_background">#000000</color>
+    <color name="on_error">#FFFFFF</color>
+    
+    <!-- Dark theme colors -->
+    <color name="primary_dark">#64B5F6</color>
+    <color name="primary_variant_dark">#42A5F5</color>
+    <color name="secondary_dark">#4DB6AC</color>
+    <color name="secondary_variant_dark">#26A69A</color>
+    <color name="surface_dark">#121212</color>
+    <color name="background_dark">#121212</color>
+    <color name="error_dark">#CF6679</color>
+    <color name="on_primary_dark">#000000</color>
+    <color name="on_secondary_dark">#000000</color>
+    <color name="on_surface_dark">#FFFFFF</color>
+    <color name="on_background_dark">#FFFFFF</color>
+    <color name="on_error_dark">#000000</color>
+    
+    <!-- Status colors -->
+    <color name="success">#4CAF50</color>
+    <color name="warning">#FF9800</color>
+    <color name="info">#2196F3</color>
+</resources>

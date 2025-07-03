@@ -18,12 +18,29 @@ import java.nio.charset.StandardCharsets;
 public class WebhookUploader {
     private static final String TAG = WebhookUploader.class.getSimpleName();
 
-    private String webhookUrl;
-    private String apiKey;
+    private final String webhookUrl;
+    private final String apiKey;
 
     public WebhookUploader(String url, String apiKey) {
         this.webhookUrl = url;
         this.apiKey = apiKey;
+    }
+
+    /**
+     * Uploads data to a webhook URL.
+     *
+     * @param jsonString the JSON data as string to be uploaded
+     * @return true if successful (status 200), false otherwise
+     */
+    public boolean upload(String jsonString) {
+        try {
+            JSONObject jsonObject = new JSONObject(jsonString);
+            int responseCode = upload(jsonObject);
+            return responseCode == HttpURLConnection.HTTP_OK;
+        } catch (Exception e) {
+            Log.e(TAG, "Error uploading JSON string: " + e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -46,7 +63,7 @@ public class WebhookUploader {
             }
             int responseCode = conn.getResponseCode();
             if (responseCode != HttpURLConnection.HTTP_OK) {
-                Log.e(TAG, "Error POSTing message: Status code " + String.valueOf(responseCode));
+                Log.e(TAG, "Error POSTing message: Status code " + responseCode);
             }
             return responseCode;
         } catch (ProtocolException e) {
