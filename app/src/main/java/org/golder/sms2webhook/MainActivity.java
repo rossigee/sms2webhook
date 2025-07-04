@@ -21,6 +21,9 @@ import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.graphics.Insets;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
@@ -81,6 +84,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             setContentView(R.layout.activity_main);
+            setupEdgeToEdge();
             initializeViews();
             setupObservers();
 
@@ -91,6 +95,17 @@ public class MainActivity extends AppCompatActivity {
             // Show error to user
             Toast.makeText(this, "Failed to initialize app: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void setupEdgeToEdge() {
+        // Apply window insets to handle edge-to-edge display
+        MaterialToolbar toolbar = findViewById(R.id.app_toolbar);
+        ViewCompat.setOnApplyWindowInsetsListener(toolbar, (v, windowInsets) -> {
+            Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+            // Add padding to the toolbar to account for status bar
+            v.setPadding(v.getPaddingLeft(), insets.top, v.getPaddingRight(), v.getPaddingBottom());
+            return WindowInsetsCompat.CONSUMED;
+        });
     }
 
     private void initializeViews() {

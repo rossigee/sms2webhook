@@ -17,6 +17,11 @@
         <!-- Material Design elevation -->
         <item name="elevationOverlayEnabled">true</item>
         
+        <!-- System bars configuration -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+        
         <!-- Custom attributes -->
         <item name="successColor">@color/success</item>
         <item name="warningColor">@color/warning</item>
@@ -40,6 +45,11 @@
         
         <!-- Material Design elevation -->
         <item name="elevationOverlayEnabled">true</item>
+        
+        <!-- System bars configuration -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
         
         <!-- Custom attributes -->
         <item name="successColor">@color/success</item>
