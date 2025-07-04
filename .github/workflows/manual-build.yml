@@ -88,7 +88,7 @@ jobs:
 
       - name: Create Release
         if: ${{ inputs.create_release }}
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: manual-${{ steps.version.outputs.VERSION_NAME }}-${{ steps.version.outputs.TIMESTAMP }}
           name: ${{ inputs.release_name || format('Manual Build {0}', steps.version.outputs.TIMESTAMP) }}
