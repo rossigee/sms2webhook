@@ -9,8 +9,6 @@ import android.os.Looper;
 import android.telephony.SmsMessage;
 import android.util.Log;
 
-import static android.provider.Settings.System.getString;
-
 public class SmsBroadcastReceiver extends BroadcastReceiver {
     private static final String TAG = SmsBroadcastReceiver.class.getSimpleName();
     private static final String ACTION_SMS_RECEIVED = "android.provider.Telephony.SMS_RECEIVED";
