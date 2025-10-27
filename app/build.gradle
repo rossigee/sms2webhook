@@ -51,10 +51,10 @@ dependencies {
     implementation 'com.google.android.material:material:1.13.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
     implementation 'androidx.preference:preference:1.2.1'
-    implementation 'androidx.work:work-runtime:2.10.5'
-    implementation 'androidx.room:room-common:2.8.2'
-    implementation 'androidx.room:room-runtime:2.8.2'
-    annotationProcessor 'androidx.room:room-compiler:2.8.2'
+    implementation 'androidx.work:work-runtime:2.11.0'
+    implementation 'androidx.room:room-common:2.8.3'
+    implementation 'androidx.room:room-runtime:2.8.3'
+    annotationProcessor 'androidx.room:room-compiler:2.8.3'
     
     // Added for MVVM architecture
     implementation 'androidx.lifecycle:lifecycle-viewmodel:2.9.4'
