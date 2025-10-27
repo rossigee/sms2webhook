@@ -72,7 +72,7 @@ jobs:
 
       - name: Upload Debug APK
         if: ${{ inputs.build_type == 'debug' || inputs.build_type == 'both' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: sms2webhook-debug-manual-${{ steps.version.outputs.TIMESTAMP }}
           path: sms2webhook-*-debug-*.apk
@@ -80,7 +80,7 @@ jobs:
 
       - name: Upload Release APK
         if: ${{ inputs.build_type == 'release' || inputs.build_type == 'both' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: sms2webhook-release-manual-${{ steps.version.outputs.TIMESTAMP }}
           path: sms2webhook-*-release-*.apk
