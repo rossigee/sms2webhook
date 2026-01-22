@@ -68,7 +68,7 @@ jobs:
           rm -f keystore.jks keystore.p12
       
       - name: Upload signed APK
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: signed-apk
           path: app/build/outputs/apk/release/app-release-signed.apk
