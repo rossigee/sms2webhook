@@ -35,7 +35,7 @@ jobs:
 
       - name: Upload lint results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: lint-results
           path: app/build/reports/lint-results-*.html
@@ -90,13 +90,13 @@ jobs:
           mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/sms2webhook-${{ steps.version.outputs.VERSION_NAME }}-release-${{ steps.commit.outputs.COMMIT_SHORT }}.apk
 
       - name: Upload Debug APK
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: sms2webhook-debug-${{ steps.commit.outputs.BRANCH_NAME }}-${{ steps.commit.outputs.COMMIT_SHORT }}
           path: app/build/outputs/apk/debug/sms2webhook-*.apk
 
       - name: Upload Release APK
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: sms2webhook-release-${{ steps.commit.outputs.BRANCH_NAME }}-${{ steps.commit.outputs.COMMIT_SHORT }}
           path: app/build/outputs/apk/release/sms2webhook-*.apk
