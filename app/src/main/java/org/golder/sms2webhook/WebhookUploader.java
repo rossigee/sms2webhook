@@ -55,7 +55,9 @@ public class WebhookUploader {
             conn = getHttpURLConnection(webhookUrl);
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json; utf-8");
-            conn.setRequestProperty("Authorization", String.format("Bearer %s", apiKey));
+            if (apiKey != null && !apiKey.isEmpty()) {
+                conn.setRequestProperty("Authorization", String.format("Bearer %s", apiKey));
+            }
             conn.setDoOutput(true);
             byte[] input = msg.toString().getBytes(StandardCharsets.UTF_8);
             try (OutputStream os = conn.getOutputStream()) {

@@ -55,11 +55,14 @@ dependencies {
     implementation 'androidx.room:room-common:2.8.4'
     implementation 'androidx.room:room-runtime:2.8.4'
     annotationProcessor 'androidx.room:room-compiler:2.8.4'
+
+    implementation 'androidx.activity:activity:1.9.3'
+    implementation 'androidx.fragment:fragment:1.8.5'
     
     // Added for MVVM architecture
-    implementation 'androidx.lifecycle:lifecycle-viewmodel:2.8.0'
-    implementation 'androidx.lifecycle:lifecycle-livedata:2.8.0'
-    implementation 'androidx.lifecycle:lifecycle-common-java8:2.8.0'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-livedata:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-common-java8:2.8.7'
     
     // Added for RecyclerView and SwipeRefreshLayout
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
