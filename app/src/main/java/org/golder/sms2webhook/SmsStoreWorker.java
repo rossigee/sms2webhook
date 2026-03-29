@@ -56,19 +56,19 @@ public class SmsStoreWorker extends Worker {
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         String webhookUrl = prefs.getString("webhook_url", "");
-        if(webhookUrl.equals("")) {
+        if(webhookUrl.isEmpty()) {
             Log.e(TAG, "Webhook URL not defined.");
             app.addMessage("ERROR: Webhook URL not defined.");
             return Result.failure();
         }
         String apiKey = prefs.getString("api_key", "");
-        if(apiKey.equals("")) {
-            Log.e(TAG, "API key not defined.");
-            app.addMessage("ERROR: API key not defined.");
-            return Result.failure();
-        }
 
         Cursor cursor = context.getContentResolver().query(Telephony.Sms.CONTENT_URI, null, null, null, "_id");
+        if (cursor == null) {
+            Log.e(TAG, "Failed to query SMS inbox.");
+            app.addMessage("ERROR: Failed to query SMS inbox.");
+            return Result.failure();
+        }
         int total = cursor.getCount();
         Log.i(TAG, "SMS message count: " + total);
         if(total == 0) {
