@@ -8,13 +8,14 @@ import android.os.Handler;
 import android.provider.Telephony;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import androidx.preference.PreferenceManager;
 
 public class MainApplication extends Application {
     private MainActivity mainActivity;
 
-    int watermark = 0;
+    private final AtomicInteger watermark = new AtomicInteger(0);
 
     int inboxCount = 0;
     int sentCount = 0;
@@ -29,26 +30,25 @@ public class MainApplication extends Application {
         Context ctx = getApplicationContext();
 
         try {
-            try (Cursor cursor = getContentResolver().query(Telephony.Sms.CONTENT_URI, null, null, null, "_id")) {
-                if (cursor != null) {
-                    inboxCount = cursor.getCount();
-                }
-            }
-        } catch (Exception e) {
-            // If SMS access fails, just log and continue
-            android.util.Log.e("MainApplication", "Failed to query SMS: " + e.getMessage());
-            inboxCount = 0;
-        }
-
-        try {
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ctx);
-            watermark = prefs.getInt("watermark", 0);
+            watermark.set(prefs.getInt("watermark", 0));
         } catch (Exception e) {
             android.util.Log.e("MainApplication", "Failed to get preferences: " + e.getMessage());
-            watermark = 0;
+            watermark.set(0);
         }
 
         new Thread(() -> {
+            try {
+                try (Cursor cursor = getContentResolver().query(Telephony.Sms.CONTENT_URI, null, null, null, "_id")) {
+                    if (cursor != null) {
+                        inboxCount = cursor.getCount();
+                    }
+                }
+            } catch (Exception e) {
+                android.util.Log.e("MainApplication", "Failed to query SMS: " + e.getMessage());
+                inboxCount = 0;
+            }
+
             try {
                 sentCount = DigestCache.getSentCount(ctx);
                 unsentCount = DigestCache.getNotSentCount(ctx);
@@ -69,15 +69,19 @@ public class MainApplication extends Application {
     }
 
     public void setWatermark(int level) {
-        watermark = level;
+        watermark.set(level);
         updateStats();
+    }
+
+    public int getWatermark() {
+        return watermark.get();
     }
 
     public void updateStats() {
         Context ctx = getApplicationContext();
         Handler handler = new Handler(ctx.getMainLooper());
         handler.post(() -> {
-            if(mainActivity != null) {
+            if (mainActivity != null) {
                 mainActivity.updateStats(ctx);
             }
         });
@@ -87,7 +91,7 @@ public class MainApplication extends Application {
         Context ctx = getApplicationContext();
         Handler handler = new Handler(ctx.getMainLooper());
         handler.post(() -> {
-            if(mainActivity != null) {
+            if (mainActivity != null) {
                 mainActivity.restoreMessages();
             }
         });
@@ -98,7 +102,7 @@ public class MainApplication extends Application {
         Context ctx = getApplicationContext();
         Handler handler = new Handler(ctx.getMainLooper());
         handler.post(() -> {
-            if(mainActivity != null) {
+            if (mainActivity != null) {
                 mainActivity.addMessage(line);
             }
         });

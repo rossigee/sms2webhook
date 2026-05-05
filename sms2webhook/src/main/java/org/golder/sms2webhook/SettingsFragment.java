@@ -34,9 +34,12 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 if (url.isEmpty()) {
                     return true; // Allow empty URL
                 }
-                
-                if (!isValidUrl(url)) {
+                if (!Patterns.WEB_URL.matcher(url).matches()) {
                     Toast.makeText(getContext(), R.string.invalid_url, Toast.LENGTH_SHORT).show();
+                    return false;
+                }
+                if (!url.startsWith("https://")) {
+                    Toast.makeText(getContext(), R.string.invalid_url_https_required, Toast.LENGTH_SHORT).show();
                     return false;
                 }
                 return true;
@@ -69,8 +72,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     }
 
     private boolean isValidUrl(String url) {
-        return Patterns.WEB_URL.matcher(url).matches() && 
-               (url.startsWith("http://") || url.startsWith("https://"));
+        return Patterns.WEB_URL.matcher(url).matches() &&
+                url.startsWith("https://");
     }
 
     private void testConnection() {
@@ -83,7 +86,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         String apiKey = apiKeyPref != null ? apiKeyPref.getText() : null;
         
         if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
-            Toast.makeText(getContext(), "Please set webhook URL first", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), R.string.webhook_url_required, Toast.LENGTH_SHORT).show();
             return;
         }
         
@@ -92,8 +95,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             return;
         }
 
-        // Show testing message
-        Toast.makeText(getContext(), "Testing connection...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(getContext(), R.string.testing_connection, Toast.LENGTH_SHORT).show();
         
         // Run test in background
         executorService.execute(() -> {
@@ -111,7 +113,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                         if (success) {
                             Toast.makeText(getContext(), R.string.connection_test_success, Toast.LENGTH_LONG).show();
                         } else {
-                            Toast.makeText(getContext(), "Connection test failed", Toast.LENGTH_LONG).show();
+                            Toast.makeText(getContext(), R.string.connection_test_failed_generic, Toast.LENGTH_LONG).show();
                         }
                     });
                 }

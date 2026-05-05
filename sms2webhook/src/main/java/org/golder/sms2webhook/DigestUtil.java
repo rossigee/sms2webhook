@@ -4,8 +4,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public class DigestUtil {
-    private static final String TAG = DigestUtil.class.getSimpleName();
-
     public static String getHexSHA256Hash(byte[] msg) throws NoSuchAlgorithmException {
         MessageDigest md = MessageDigest.getInstance("SHA-256");
         md.update(msg);

@@ -40,3 +40,7 @@ amplifytools.xcconfig
 *.keystore
 *.p12
 release-keystore.*
+
+# IDE files
+.project
+.settings/

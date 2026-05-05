@@ -152,7 +152,7 @@ public class MainViewModel extends AndroidViewModel {
             this.totalCount = totalCount;
             this.sentCount = sentCount;
             this.unsentCount = unsentCount;
-            this.progress = totalCount > 0 ? (sentCount * 100) / totalCount : 0;
+            this.progress = totalCount > 0 ? Math.min(100, (sentCount * 100) / totalCount) : 0;
         }
     }
 

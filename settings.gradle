@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "sms2webhook"
-include ':app'
+include ':sms2webhook'

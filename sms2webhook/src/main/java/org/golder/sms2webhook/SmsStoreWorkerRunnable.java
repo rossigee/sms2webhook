@@ -21,13 +21,14 @@ public class SmsStoreWorkerRunnable implements Runnable {
 
     @Override
     public void run() {
-        WorkManager instance = WorkManager.getInstance(context);
-        if (instance == null) {
-            Log.e(TAG, "WorkManager is null");
+        WorkManager instance;
+        try {
+            instance = WorkManager.getInstance(context);
+        } catch (IllegalStateException e) {
+            Log.e(TAG, "WorkManager not initialised", e);
             return;
         }
 
-        // Start worker to process SMS store
         Log.i(TAG, "Running worker...");
         Constraints.Builder builder = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED);
@@ -38,5 +39,8 @@ public class SmsStoreWorkerRunnable implements Runnable {
                 .setConstraints(builder.build())
                 .build();
         instance.enqueue(request);
+
+        MainApplication app = (MainApplication) context.getApplicationContext();
+        app.addMessage(context.getString(R.string.sync_queued));
     }
 }

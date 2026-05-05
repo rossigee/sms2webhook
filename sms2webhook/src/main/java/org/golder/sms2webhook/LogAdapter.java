@@ -44,8 +44,14 @@ public class LogAdapter extends RecyclerView.Adapter<LogAdapter.LogViewHolder> {
     }
 
     public void updateLogs(List<MainViewModel.LogEntry> newLogs) {
+        int prevSize = this.logs.size();
         this.logs = new ArrayList<>(newLogs);
-        notifyDataSetChanged();
+        int newSize = this.logs.size();
+        if (newSize > prevSize) {
+            notifyItemRangeInserted(0, newSize - prevSize);
+        } else {
+            notifyDataSetChanged();
+        }
     }
 
     class LogViewHolder extends RecyclerView.ViewHolder {

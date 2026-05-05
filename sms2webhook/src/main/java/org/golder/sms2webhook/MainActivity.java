@@ -3,7 +3,6 @@ package org.golder.sms2webhook;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
@@ -12,25 +11,29 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.lifecycle.ViewModelProvider;
-import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.core.graphics.Insets;
+import androidx.work.WorkInfo;
+import androidx.work.WorkManager;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
 
-import android.widget.TextView;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = MainActivity.class.getSimpleName();
@@ -38,23 +41,32 @@ public class MainActivity extends AppCompatActivity {
 
     private MainViewModel viewModel;
     private LogAdapter logAdapter;
+    private RecyclerView logRecyclerView;
     private SwipeRefreshLayout swipeRefreshLayout;
     private LinearProgressIndicator progressBar;
     private TextView storeCountTextView;
     private TextView sentCountTextView;
     private TextView unsentCountTextView;
 
+    private boolean uiInitialized = false;
+    private final Map<UUID, WorkInfo.State> workStates = new HashMap<>();
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
         if (requestCode == PERMISSION_REQUEST_CODE) {
+            boolean allGranted = grantResults.length > 0;
             for (int i = 0; i < permissions.length; i++) {
                 if (grantResults[i] == PackageManager.PERMISSION_DENIED) {
+                    allGranted = false;
                     Log.e(TAG, "Permission: " + permissions[i] + " was denied.");
-                    viewModel.addLogEntry("ERROR: Permission: " + permissions[i] + " was denied.", 
-                                        MainViewModel.LogEntry.Type.ERROR);
+                    viewModel.addLogEntry("ERROR: Permission: " + permissions[i] + " was denied.",
+                            MainViewModel.LogEntry.Type.ERROR);
                 }
+            }
+            if (allGranted && !uiInitialized) {
+                initializeUI();
             }
         }
     }
@@ -64,14 +76,11 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         try {
-            // Initialize ViewModel
             viewModel = new ViewModelProvider(this).get(MainViewModel.class);
 
-            // Allow main application to add messages to message panel
             MainApplication mainApplication = (MainApplication) getApplication();
             mainApplication.setMainActivity(this);
 
-            // Check/acquire permissions
             if (checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_DENIED) {
                 requestPermissions(
                         new String[]{
@@ -83,53 +92,49 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            setContentView(R.layout.activity_main);
-            setupEdgeToEdge();
-            initializeViews();
-            setupObservers();
-
-            viewModel.addLogEntry(getString(R.string.started_main_activity), MainViewModel.LogEntry.Type.INFO);
-            viewModel.loadStatistics();
+            initializeUI();
         } catch (Exception e) {
             Log.e(TAG, "Error in onCreate: " + e.getMessage(), e);
-            // Show error to user
             Toast.makeText(this, "Failed to initialize app: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
+    private void initializeUI() {
+        setContentView(R.layout.activity_main);
+        setupEdgeToEdge();
+        initializeViews();
+        setupObservers();
+        viewModel.addLogEntry(getString(R.string.started_main_activity), MainViewModel.LogEntry.Type.INFO);
+        viewModel.loadStatistics();
+        uiInitialized = true;
+    }
+
     private void setupEdgeToEdge() {
-        // Apply window insets to handle edge-to-edge display
         MaterialToolbar toolbar = findViewById(R.id.app_toolbar);
         ViewCompat.setOnApplyWindowInsetsListener(toolbar, (v, windowInsets) -> {
             Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            // Add padding to the toolbar to account for status bar
             v.setPadding(v.getPaddingLeft(), insets.top, v.getPaddingRight(), v.getPaddingBottom());
             return WindowInsetsCompat.CONSUMED;
         });
     }
 
     private void initializeViews() {
-        // Setup toolbar
         MaterialToolbar toolbar = findViewById(R.id.app_toolbar);
         setSupportActionBar(toolbar);
 
-        // Initialize views
         storeCountTextView = findViewById(R.id.storeCountTextView);
         sentCountTextView = findViewById(R.id.sentCountTextView);
         unsentCountTextView = findViewById(R.id.unsentCountTextView);
         progressBar = findViewById(R.id.progressBar);
         swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
 
-        // Setup RecyclerView
-        RecyclerView logRecyclerView = findViewById(R.id.logRecyclerView);
+        logRecyclerView = findViewById(R.id.logRecyclerView);
         logAdapter = new LogAdapter(this);
         logRecyclerView.setAdapter(logAdapter);
         logRecyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        // Setup SwipeRefreshLayout
         swipeRefreshLayout.setOnRefreshListener(() -> viewModel.refreshLogs());
 
-        // Setup buttons
         MaterialButton syncButton = findViewById(R.id.syncButton);
         MaterialButton clearCacheButton = findViewById(R.id.clearCacheButton);
 
@@ -138,10 +143,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupObservers() {
-        // Observe logs
-        viewModel.getLogs().observe(this, logs -> logAdapter.updateLogs(logs));
+        // Scroll to top so newest entries are always visible
+        viewModel.getLogs().observe(this, logs -> {
+            logAdapter.updateLogs(logs);
+            if (!logs.isEmpty()) {
+                logRecyclerView.scrollToPosition(0);
+            }
+        });
 
-        // Observe statistics
         viewModel.getStatistics().observe(this, stats -> {
             storeCountTextView.setText(String.valueOf(stats.totalCount));
             sentCountTextView.setText(String.valueOf(stats.sentCount));
@@ -149,29 +158,50 @@ public class MainActivity extends AppCompatActivity {
             progressBar.setProgress(stats.progress);
         });
 
-        // Observe loading state
-        viewModel.getIsLoading().observe(this, isLoading -> 
+        viewModel.getIsLoading().observe(this, isLoading ->
             swipeRefreshLayout.setRefreshing(isLoading)
         );
 
-        // Observe error messages
         viewModel.getErrorMessage().observe(this, error -> {
             if (error != null && !error.isEmpty()) {
                 Toast.makeText(this, error, Toast.LENGTH_LONG).show();
                 viewModel.addLogEntry(error, MainViewModel.LogEntry.Type.ERROR);
             }
         });
+
+        // Surface WorkManager state transitions so the user can see when the worker
+        // is waiting for network, running, or has failed.
+        WorkManager.getInstance(this).getWorkInfosByTagLiveData("message")
+                .observe(this, workInfos -> {
+                    if (workInfos == null) return;
+                    for (WorkInfo info : workInfos) {
+                        WorkInfo.State prev = workStates.get(info.getId());
+                        WorkInfo.State curr = info.getState();
+                        if (curr == prev) continue;
+                        workStates.put(info.getId(), curr);
+                        switch (curr) {
+                            case RUNNING:
+                                viewModel.addLogEntry(getString(R.string.worker_running),
+                                        MainViewModel.LogEntry.Type.INFO);
+                                break;
+                            case FAILED:
+                                viewModel.addLogEntry(getString(R.string.worker_failed),
+                                        MainViewModel.LogEntry.Type.ERROR);
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                });
     }
 
     private void syncSms() {
-        viewModel.addLogEntry("Starting SMS sync...", MainViewModel.LogEntry.Type.INFO);
-        
-        // Reset watermark to zero
+        viewModel.addLogEntry(getString(R.string.starting_sms_sync), MainViewModel.LogEntry.Type.INFO);
+
         MainApplication app = (MainApplication) getApplication();
         app.setWatermark(0);
         viewModel.loadStatistics();
 
-        // Run store worker
         Handler handler = new Handler(Looper.getMainLooper());
         Context ctx = getApplicationContext();
         handler.post(new SmsStoreWorkerRunnable(ctx));
@@ -189,8 +219,7 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         if (id == R.id.action_settings) {
-            Intent intent = new Intent(this, SettingsActivity.class);
-            startActivity(intent);
+            startActivity(new Intent(this, SettingsActivity.class));
             return true;
         }
 
@@ -212,7 +241,6 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    // Legacy methods for backward compatibility with MainApplication
     public void restoreMessages() {
         // No longer needed with ViewModel approach
     }
@@ -232,21 +260,13 @@ public class MainActivity extends AppCompatActivity {
     public void updateStats(Context ctx) {
         viewModel.loadStatistics();
     }
-    
+
     private void showClearCacheDialog() {
         new MaterialAlertDialogBuilder(this)
-            .setTitle("Clear Cache")
-            .setMessage("This will clear all cached message data. You may want to sync SMS first to ensure all messages are uploaded.")
-            .setPositiveButton("Clear All", (dialog, which) -> {
-                viewModel.clearCache();
-            })
-            .setNegativeButton("Cancel", null)
-            .setNeutralButton("Fix Duplicates", (dialog, which) -> {
-                viewModel.addLogEntry("Fixing duplicate entries...", MainViewModel.LogEntry.Type.INFO);
-                // The migration will automatically fix duplicates when the database is upgraded
-                viewModel.loadStatistics();
-                Toast.makeText(this, "Database migration will fix duplicates on next app restart", Toast.LENGTH_LONG).show();
-            })
+            .setTitle(R.string.clear_cache)
+            .setMessage(R.string.clear_cache_message)
+            .setPositiveButton(R.string.clear_all, (dialog, which) -> viewModel.clearCache())
+            .setNegativeButton(R.string.cancel, null)
             .show();
     }
 }

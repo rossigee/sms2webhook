@@ -6,9 +6,9 @@
     <string name="action_clear_cache">Clear cache</string>
     <string name="action_quit">Quit</string>
     <string name="activity_logs">Activity logs…</string>
-    <string name="retry_count">Unsent</string>
-    <string name="sent_count">Sent</string>
-    <string name="store_count">Store</string>
+    <string name="retry_count">Failed</string>
+    <string name="sent_count">Uploaded</string>
+    <string name="store_count">Inbox</string>
     <string name="started_main_activity">Started main activity...</string>
     <string name="received_sms_from_s">Received SMS from %s</string>
     <string name="processing">"Processing %s"</string>
@@ -24,4 +24,15 @@
     <string name="connection_test_success">Connection test successful</string>
     <string name="connection_test_failed">Connection test failed: %s</string>
     <string name="invalid_url">Please enter a valid URL</string>
+    <string name="starting_sms_sync">Starting SMS sync…</string>
+    <string name="sync_queued">Sync queued — waiting for network…</string>
+    <string name="worker_running">Worker running…</string>
+    <string name="worker_failed">Sync failed — check webhook URL and network</string>
+    <string name="clear_cache_message">This will clear all cached message data. Sync SMS first to ensure all messages are uploaded.</string>
+    <string name="clear_all">Clear All</string>
+    <string name="cancel">Cancel</string>
+    <string name="invalid_url_https_required">Webhook URL must use HTTPS</string>
+    <string name="webhook_url_required">Please configure a webhook URL first</string>
+    <string name="testing_connection">Testing connection…</string>
+    <string name="connection_test_failed_generic">Connection test failed</string>
 </resources>

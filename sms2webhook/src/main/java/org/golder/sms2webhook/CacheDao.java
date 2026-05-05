@@ -10,7 +10,7 @@ public interface CacheDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(CacheEntry entry);
 
-    @Query("SELECT COUNT(*) FROM cacheentry WHERE key = :key")
+    @Query("SELECT EXISTS(SELECT 1 FROM cacheentry WHERE key = :key)")
     boolean exists(String key);
 
     @Query("SELECT value FROM cacheentry WHERE key = :key")
