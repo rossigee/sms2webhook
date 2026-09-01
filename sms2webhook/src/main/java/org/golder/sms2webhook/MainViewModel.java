@@ -15,6 +15,7 @@ public class MainViewModel extends AndroidViewModel {
     private final MutableLiveData<List<LogEntry>> logs = new MutableLiveData<>();
     private final MutableLiveData<Statistics> statistics = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>();
+    private final MutableLiveData<Boolean> isSyncing = new MutableLiveData<>();
     private final MutableLiveData<String> errorMessage = new MutableLiveData<>();
     
     private final List<LogEntry> logList = new ArrayList<>();
@@ -27,6 +28,7 @@ public class MainViewModel extends AndroidViewModel {
         statistics.setValue(new Statistics(0, 0, 0));
         logs.setValue(new ArrayList<>());
         isLoading.setValue(false);
+        isSyncing.setValue(false);
     }
 
     public LiveData<List<LogEntry>> getLogs() {
@@ -39,6 +41,14 @@ public class MainViewModel extends AndroidViewModel {
 
     public LiveData<Boolean> getIsLoading() {
         return isLoading;
+    }
+
+    public LiveData<Boolean> getIsSyncing() {
+        return isSyncing;
+    }
+
+    public void setSyncing(boolean syncing) {
+        isSyncing.postValue(syncing);
     }
 
     public LiveData<String> getErrorMessage() {

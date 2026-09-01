@@ -84,6 +84,14 @@ public class SmsStoreWorker extends Worker {
             }
 
             while (app.getWatermark() < total) {
+                if (isStopped()) {
+                    Log.i(TAG, "Worker stopped. Aborting sync.");
+                    app.addMessage("Sync stopped by user.");
+                    prefs.edit().putInt("watermark", app.getWatermark()).apply();
+                    app.updateStats();
+                    return Result.failure();
+                }
+
                 String ref = "[" + (app.getWatermark() + 1) + " / " + total + "]";
                 Log.i(TAG, app.getString(R.string.processing, ref));
 
@@ -114,6 +122,13 @@ public class SmsStoreWorker extends Worker {
                         if (statusCode == HttpURLConnection.HTTP_OK) {
                             Log.i(TAG, app.getString(R.string.uploaded_with_status_code, statusCode));
                             app.addMessage(ref + ": " + app.getString(R.string.uploaded_with_status_code, statusCode));
+                        } else if (statusCode >= 400) {
+                            Log.e(TAG, app.getString(R.string.failed_with_status_code, statusCode));
+                            app.addMessage(ref + ": " + app.getString(R.string.failed_with_status_code, statusCode) + " - aborting sync");
+                            DigestCache.set(context, hash, statusCode);
+                            prefs.edit().putInt("watermark", app.getWatermark()).apply();
+                            app.updateStats();
+                            return Result.failure();
                         } else {
                             Log.i(TAG, app.getString(R.string.failed_with_status_code, statusCode));
                             app.addMessage(ref + ": " + app.getString(R.string.failed_with_status_code, statusCode));

@@ -159,6 +159,18 @@
             app:icon="@android:drawable/ic_menu_rotate" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/stopSyncButton"
+            style="@style/Widget.SMS2Webhook.Button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:text="@string/stop_sync"
+            android:visibility="gone"
+            app:icon="@android:drawable/ic_media_pause" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/clearCacheButton"
             style="@style/Widget.SMS2Webhook.Button.Outlined"
             android:layout_width="0dp"

@@ -11,6 +11,7 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -47,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView storeCountTextView;
     private TextView sentCountTextView;
     private TextView unsentCountTextView;
+    private MaterialButton syncButton;
+    private MaterialButton stopSyncButton;
 
     private boolean uiInitialized = false;
     private final Map<UUID, WorkInfo.State> workStates = new HashMap<>();
@@ -135,10 +138,12 @@ public class MainActivity extends AppCompatActivity {
 
         swipeRefreshLayout.setOnRefreshListener(() -> viewModel.refreshLogs());
 
-        MaterialButton syncButton = findViewById(R.id.syncButton);
+        syncButton = findViewById(R.id.syncButton);
+        stopSyncButton = findViewById(R.id.stopSyncButton);
         MaterialButton clearCacheButton = findViewById(R.id.clearCacheButton);
 
         syncButton.setOnClickListener(v -> syncSms());
+        stopSyncButton.setOnClickListener(v -> stopSync());
         clearCacheButton.setOnClickListener(v -> showClearCacheDialog());
     }
 
@@ -162,6 +167,13 @@ public class MainActivity extends AppCompatActivity {
             swipeRefreshLayout.setRefreshing(isLoading)
         );
 
+        // Observe syncing state to show/hide buttons
+        viewModel.getIsSyncing().observe(this, isSyncing -> {
+            if (isSyncing != null) {
+                updateSyncButtons(isSyncing);
+            }
+        });
+
         viewModel.getErrorMessage().observe(this, error -> {
             if (error != null && !error.isEmpty()) {
                 Toast.makeText(this, error, Toast.LENGTH_LONG).show();
@@ -174,6 +186,7 @@ public class MainActivity extends AppCompatActivity {
         WorkManager.getInstance(this).getWorkInfosByTagLiveData("message")
                 .observe(this, workInfos -> {
                     if (workInfos == null) return;
+                    boolean anyRunning = false;
                     for (WorkInfo info : workInfos) {
                         WorkInfo.State prev = workStates.get(info.getId());
                         WorkInfo.State curr = info.getState();
@@ -181,16 +194,22 @@ public class MainActivity extends AppCompatActivity {
                         workStates.put(info.getId(), curr);
                         switch (curr) {
                             case RUNNING:
+                                anyRunning = true;
                                 viewModel.addLogEntry(getString(R.string.worker_running),
                                         MainViewModel.LogEntry.Type.INFO);
                                 break;
+                            case SUCCEEDED:
                             case FAILED:
-                                viewModel.addLogEntry(getString(R.string.worker_failed),
-                                        MainViewModel.LogEntry.Type.ERROR);
+                            case CANCELLED:
+                                viewModel.setSyncing(false);
                                 break;
                             default:
                                 break;
                         }
+                    }
+                    // If any work is running, we're syncing
+                    if (anyRunning) {
+                        viewModel.setSyncing(true);
                     }
                 });
     }
@@ -205,6 +224,22 @@ public class MainActivity extends AppCompatActivity {
         Handler handler = new Handler(Looper.getMainLooper());
         Context ctx = getApplicationContext();
         handler.post(new SmsStoreWorkerRunnable(ctx));
+    }
+
+    private void stopSync() {
+        viewModel.addLogEntry(getString(R.string.stopping_sync), MainViewModel.LogEntry.Type.WARNING);
+        WorkManager.getInstance(this).cancelAllWorkByTag("message");
+        viewModel.setSyncing(false);
+    }
+
+    private void updateSyncButtons(boolean isSyncing) {
+        if (isSyncing) {
+            syncButton.setVisibility(View.GONE);
+            stopSyncButton.setVisibility(View.VISIBLE);
+        } else {
+            syncButton.setVisibility(View.VISIBLE);
+            stopSyncButton.setVisibility(View.GONE);
+        }
     }
 
     @Override

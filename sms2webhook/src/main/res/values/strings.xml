@@ -17,6 +17,8 @@
     <string name="failed_with_status_code">Failed (status code: %d)</string>
     <string name="api_key">API key</string>
     <string name="sync_sms">Sync SMS</string>
+    <string name="stop_sync">Stop Sync</string>
+    <string name="stopping_sync">Stopping sync…</string>
     <string name="clear_cache">Clear Cache</string>
     <string name="test_connection">Test Connection</string>
     <string name="webhook_url_hint">Enter webhook URL</string>
