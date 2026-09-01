@@ -20,7 +20,7 @@ SMS2Webhook is an Android application that monitors incoming SMS messages and fo
 
 ```bash
 # Set Java 17 for building
-export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 
 # Build the app
 ./gradlew build
