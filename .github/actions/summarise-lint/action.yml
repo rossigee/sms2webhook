@@ -1,0 +1,37 @@
+name: Summarise lint results
+description: >
+  Append the error and warning counts from an Android lint XML report to the
+  job summary. Shared by android.yml and pr-check.yml so the two cannot drift.
+
+inputs:
+  report-path:
+    description: Path to the lint XML report to read.
+    required: true
+  note:
+    description: Optional prose appended after the counts.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Count lint issues
+      shell: bash
+      env:
+        LINT_REPORT: ${{ inputs.report-path }}
+        LINT_NOTE: ${{ inputs.note }}
+      run: |
+        echo "### Lint Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ -f "$LINT_REPORT" ]; then
+          ERRORS=$(grep -o 'severity="Error"' "$LINT_REPORT" | wc -l)
+          WARNINGS=$(grep -o 'severity="Warning"' "$LINT_REPORT" | wc -l)
+          echo "- Errors: $ERRORS" >> $GITHUB_STEP_SUMMARY
+          echo "- Warnings: $WARNINGS" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$LINT_NOTE" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "$LINT_NOTE" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "- Report not generated" >> $GITHUB_STEP_SUMMARY
+        fi

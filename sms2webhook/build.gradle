@@ -54,6 +54,9 @@ android {
                 storePassword releaseStorePassword.get()
                 keyAlias releaseKeyAlias.get()
                 keyPassword releaseKeyPassword.get()
+                // Explicit, because the JDK default (pkcs12 on 21) rejects a legacy
+                // JKS keystore with "Tag number over 30 is not supported".
+                storeType = 'pkcs12'
             }
         }
     }
