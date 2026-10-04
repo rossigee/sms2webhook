@@ -1,0 +1,60 @@
+name: Verify Zapstore signing
+
+# Proves that ZAPSTORE_SIGN_WITH reaches the runner and produces valid
+# signatures, without publishing anything to the shared relay or CDN.
+#
+# Run this after changing the secret, and again after moving to a bunker
+# credential, to confirm the new credential works before it is trusted with a
+# real release.
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - zapstore.yaml
+      - .github/workflows/verify-zapstore-signing.yml
+
+permissions:
+  contents: read
+
+jobs:
+  sign:
+    name: Sign without publishing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # A release asset must exist for the action to resolve the APK from the
+      # repository. Failing loudly here beats a confusing failure inside the
+      # action.
+      - name: Require at least one published release
+        run: |
+          count=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
+            --jq '[.[] | select(.draft == false)] | length')
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No published release found. The action resolves the APK from the"
+            echo "::error::newest release asset, so a release has to exist first."
+            exit 1
+          fi
+          echo "found $count published release(s)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign the release events
+        id: sign
+        uses: rossigee/zapstore-publish@main
+        env:
+          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config: zapstore.yaml
+          mode: sign
+
+      - name: Confirm events were signed
+        run: |
+          echo "All three events were signed. Nothing was published."
+          echo "asset:   ${{ steps.sign.outputs.asset-event-id }}"
+          echo "release: ${{ steps.sign.outputs.release-event-id }}"
+          echo "app:     ${{ steps.sign.outputs.app-event-id }}"
+          echo "apk:     ${{ steps.sign.outputs.apk-sha256 }}"
+          echo "cert:    ${{ steps.sign.outputs.certificate-sha256 }}"

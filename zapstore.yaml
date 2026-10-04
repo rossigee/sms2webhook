@@ -1,0 +1,94 @@
+# Zapstore publication config.
+#
+# This file must be committed to the repository. When the first release event
+# reaches the relay, relay.zapstore.dev fetches this file, verifies that pubkey
+# matches the key used to sign, and whitelists the publisher. Without a
+# committed zapstore.yaml the event is rejected.
+#
+# See .github/workflows/README.md for the full setup procedure.
+
+repository: https://github.com/rossigee/sms2webhook
+
+# The release workflow attaches both a debug and a release-signed APK to every
+# tag. Pin the signed one so a debug build is never published to users.
+match: ".*-release-signed\\.apk$"
+
+name: SMS2Webhook
+
+summary: >-
+  Forwards incoming SMS to a webhook endpoint you control, with retries,
+  deduplication and optional API key authentication.
+
+description: |
+  SMS2Webhook runs on your own phone and posts each incoming SMS to a webhook
+  URL that you configure. It is a building block for self-hosted automation:
+  point it at your own server to trigger workflows, archive messages, feed a
+  CRM or ticketing system, or expose SMS to your own dashboards.
+
+  ## What it sends
+
+  Every forwarded message is posted as JSON to the single endpoint you set,
+  including the sender address, the message body, the timestamp and the SIM
+  slot it arrived on. If you configure an API key it is sent as an
+  `Authorization: Bearer` header.
+
+  ## What leaves the device
+
+  Message content is transmitted **only** to the webhook URL you enter. There
+  are no analytics, no advertising, no crash reporting and no third-party
+  servers. The local database stores a SHA-256 hash of each message for
+  deduplication, not the message text. Source code is public and auditable.
+
+  Because this is a self-hosted tool, the destination is yours to choose.
+  Review the URL you enter, and prefer HTTPS so message bodies are encrypted
+  in transit.
+
+  ## Permissions
+
+  - `RECEIVE_SMS` and `READ_SMS` — required to observe incoming messages and,
+    if you choose, to backfill your existing SMS history.
+  - `INTERNET` — to reach your webhook.
+  - `CAMERA` — optional, only for scanning the setup QR code.
+
+  The telephony and camera hardware features are declared optional, so the app
+  installs on devices without them.
+
+  ## Reliability
+
+  Uploads are queued in WorkManager with exponential backoff, so a webhook that
+  is briefly unreachable does not lose messages. A SHA-256 cache prevents the
+  same message being delivered twice.
+
+  ## Requirements
+
+  Android 9.0 (API 28) or later.
+
+tags:
+  - sms
+  - automation
+  - webhook
+  - self-hosted
+  - notifications
+  - privacy
+
+license: MIT
+
+website: https://github.com/rossigee/sms2webhook
+
+images:
+  - screenshots/04_settings_screen_filled.png
+  - screenshots/05_main_screen_configured.png
+  - screenshots/02_main_screen_with_logs.png
+  - screenshots/01_main_screen_empty.png
+  - screenshots/03_settings_screen_empty.png
+
+release_notes: ./CHANGELOG.md
+
+# The relay fetches this file to whitelist the publisher, and requires pubkey to
+# match the key that signs the release events.
+#
+# It does not have to be filled in by hand: the action derives the npub from the
+# ZAPSTORE_SIGN_WITH credential at publish time and writes it here. The exception
+# is a NIP-46 bunker credential, whose identity is only known after connecting,
+# which must be pasted in manually.
+pubkey: REPLACE_WITH_YOUR_NPUB

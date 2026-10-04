@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.1] - 2025-07-04
+
+### 🐛 Fixes
+- Fixed edge-to-edge display issues on Pixel 8 Pro and other modern devices
+- Corrected window inset handling for the system status bar
+- Removed a deprecated import in `SmsBroadcastReceiver`
+
+### 📚 Documentation
+- Expanded the README with full webhook payload documentation
+- Added screenshots showing the main and settings screens
+
 ## [2.0.0] - 2024-01-03
 
 ### 🎨 UI/UX Improvements
