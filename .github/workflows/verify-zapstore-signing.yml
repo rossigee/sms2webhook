@@ -24,30 +24,35 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # A release asset must exist for the action to resolve the APK from the
-      # repository. Failing loudly here beats a confusing failure inside the
-      # action.
-      - name: Require at least one published release
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # Proves the credential without needing a published release, which would
+      # otherwise be a prerequisite and mean this check could not run until one
+      # existed. The debug APK is only ever signed, never published, and mode
+      # sign uploads no media.
+      - name: Build a throwaway APK
         run: |
-          count=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
-            --jq '[.[] | select(.draft == false)] | length')
-          if [ "$count" -eq 0 ]; then
-            echo "::error::No published release found. The action resolves the APK from the"
-            echo "::error::newest release asset, so a release has to exist first."
-            exit 1
-          fi
-          echo "found $count published release(s)"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ./gradlew assembleDebug --stacktrace
+          mkdir -p .verify
+          cp sms2webhook/build/outputs/apk/debug/sms2webhook-debug.apk .verify/app.apk
+          echo "built $(stat -c%s .verify/app.apk) bytes"
 
       - name: Sign the release events
         id: sign
-        uses: rossigee/zapstore-publish@main
+        uses: rossigee/zapstore-publish@v1
         env:
           SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           config: zapstore.yaml
+          apk: .verify/app.apk
           mode: sign
 
       - name: Confirm events were signed

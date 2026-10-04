@@ -3,7 +3,13 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      # Semver only. `v*` also matches a stray `v2`, `v-next` or `v wip` tag and
+      # would publish a release from it. This is the shape GitHub's own filter
+      # cheat sheet gives for semver refs, one digit class per component: `+`
+      # means "one or more of the preceding character" and `.` is a literal dot.
+      # A prerelease such as `v2.1.0-rc1` is deliberately excluded, since this
+      # workflow publishes a full release rather than a prerelease.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 env:
   MODULE: sms2webhook
@@ -144,7 +150,7 @@ jobs:
       # skip-if-unconfigured keeps the release green before a Zapstore identity
       # exists. Remove it once publishing is expected on every tag.
       - name: Publish to Zapstore
-        uses: rossigee/zapstore-publish@main
+        uses: rossigee/zapstore-publish@v1
         env:
           SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
