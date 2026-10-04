@@ -1,0 +1,62 @@
+name: Publish to Zapstore
+
+# Publishes an existing GitHub Release to the Zapstore relay.
+#
+# `release.yml` only triggers on a tag push and creates the release as its first
+# step, so it cannot be used to retry a publish: the tag is immutable, and
+# re-running the workflow fails on `gh release create` because the release is
+# already there. That left a signed, verified release stranded whenever the
+# Zapstore step was the thing that failed, which is exactly what happened for
+# v2.1.0, where the publish failed on a missing bundled dependency in the action.
+#
+# This reuses the release artefact as-is. Nothing is rebuilt or re-signed, so a
+# retry cannot produce a different APK from the one that was released.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish, for example v2.1.0'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download the signed APK from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "${{ inputs.tag }}" \
+            --pattern '*-release-signed.apk' \
+            --dir dist
+          # Rename so the path is predictable. The name still matches the
+          # `match` pattern in zapstore.yaml, which is what keeps the debug
+          # asset from ever being published.
+          apk=$(find dist -name '*-release-signed.apk' -print -quit)
+          test -n "$apk"
+          mv "$apk" dist/sms2webhook-release-signed.apk
+          echo "APK_SHA256=$(sha256sum dist/sms2webhook-release-signed.apk | cut -d' ' -f1)" \
+            >> "$GITHUB_ENV"
+          ls -l dist/
+
+      # The relay fetches zapstore.yaml from the repository and checks the
+      # pubkey against this identity, so the two have to agree or every event is
+      # rejected. `zapstore-publisher.yml` verifies that independently.
+      - name: Publish
+        uses: rossigee/zapstore-publish@v1
+        env:
+          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config: zapstore.yaml
+          apk: dist/sms2webhook-release-signed.apk
+          skip-if-unconfigured: 'false'
