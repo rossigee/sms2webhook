@@ -160,7 +160,13 @@ public class MainActivity extends AppCompatActivity {
             storeCountTextView.setText(String.valueOf(stats.totalCount));
             sentCountTextView.setText(String.valueOf(stats.sentCount));
             unsentCountTextView.setText(String.valueOf(stats.unsentCount));
-            progressBar.setProgress(stats.progress);
+        });
+
+        // Driven by the worker's position in the sync, not by cached counts.
+        viewModel.getSyncProgress().observe(this, progress -> {
+            if (progress != null) {
+                progressBar.setProgress(progress);
+            }
         });
 
         viewModel.getIsLoading().observe(this, isLoading ->
@@ -294,6 +300,15 @@ public class MainActivity extends AppCompatActivity {
 
     public void updateStats(Context ctx) {
         viewModel.loadStatistics();
+    }
+
+    public void refreshStats(boolean withDiagnostics) {
+        viewModel.loadStatistics(withDiagnostics);
+    }
+
+    /** Progress reported by the sync worker, drawn without touching the database. */
+    public void reportSyncProgress(int processed, int total) {
+        viewModel.reportSyncProgress(processed, total);
     }
 
     private void showClearCacheDialog() {
