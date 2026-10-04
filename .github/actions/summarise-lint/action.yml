@@ -24,8 +24,11 @@ runs:
         echo "### Lint Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         if [ -f "$LINT_REPORT" ]; then
-          ERRORS=$(grep -o 'severity="Error"' "$LINT_REPORT" | wc -l)
-          WARNINGS=$(grep -o 'severity="Warning"' "$LINT_REPORT" | wc -l)
+          # grep exits 1 when there are no matches, and a composite action's shell
+          # runs with -e -o pipefail, so the count has to be allowed to come back
+          # empty-handed. A clean report legitimately has zero of one or both.
+          ERRORS=$(grep -c 'severity="Error"' "$LINT_REPORT" || true)
+          WARNINGS=$(grep -c 'severity="Warning"' "$LINT_REPORT" || true)
           echo "- Errors: $ERRORS" >> $GITHUB_STEP_SUMMARY
           echo "- Warnings: $WARNINGS" >> $GITHUB_STEP_SUMMARY
           if [ -n "$LINT_NOTE" ]; then
