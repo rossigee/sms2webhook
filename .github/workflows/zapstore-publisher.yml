@@ -1,0 +1,95 @@
+name: Zapstore publisher
+
+# Confirms the npub committed in zapstore.yaml matches the Nostr identity in
+# ZAPSTORE_SIGN_WITH.
+#
+# The Zapstore relay fetches zapstore.yaml from the repository and checks the
+# pubkey against the key that signed the release events. If the two disagree the
+# relay rejects everything, and the only symptom is a publish that appears to
+# succeed locally and is then refused. That is expensive to debug from a release
+# run, so it is checked here instead.
+#
+# Only the npub is ever printed. It is public by design; the secret is never
+# echoed, and is masked the moment it is read.
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, because a rotated key or an edited config should not go unnoticed
+    # for long.
+    - cron: "37 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  publisher:
+    name: Derive and compare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Compare committed pubkey with the signing identity
+        env:
+          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SIGN_WITH:-}" ]; then
+            echo "::error::ZAPSTORE_SIGN_WITH is not set, so the publisher cannot be verified."
+            exit 1
+          fi
+
+          # Mask before anything else can echo it.
+          echo "::add-mask::${SIGN_WITH}"
+
+          npm install --no-save nostr-tools@2 >/dev/null 2>&1
+
+          # Derive the npub. Case-insensitive bunker match, since the relay only
+          # cares about the npub and a bunker has no knowable identity until it
+          # has connected.
+          case "${SIGN_WITH}" in
+            bunker://*|nostrconnect://*)
+              echo "::notice::SIGN_WITH is a NIP-46 bunker URL, whose identity cannot be"
+              echo "::notice::derived offline. zapstore.yaml must carry the npub by hand."
+              exit 0
+              ;;
+          esac
+
+          NPUB=$(node --input-type=module -e '
+            import { nip19, getPublicKey } from "nostr-tools";
+            const raw = process.env.SIGN_WITH.trim();
+            let key;
+            if (/^[0-9a-f]{64}$/i.test(raw)) {
+              key = Uint8Array.from(Buffer.from(raw.toLowerCase(), "hex"));
+            } else if (/^nsec1/i.test(raw)) {
+              const d = nip19.decode(raw);
+              if (d.type !== "nsec") { throw new Error("not an nsec: " + d.type); }
+              key = d.data;
+            } else {
+              throw new Error("SIGN_WITH is neither an nsec nor 64 hex characters");
+            }
+            process.stdout.write(nip19.npubEncode(getPublicKey(key)));
+          ')
+
+          echo "Publisher npub: ${NPUB}"
+          echo "npub=${NPUB}" >> "$GITHUB_OUTPUT"
+
+          COMMITTED=$(grep -E '^pubkey:' zapstore.yaml 2>/dev/null | head -1 | sed 's/^pubkey:[[:space:]]*//' || true)
+
+          if [ -z "${COMMITTED}" ]; then
+            echo "::error::zapstore.yaml has no pubkey field. The relay cannot whitelist this publisher."
+            exit 1
+          fi
+
+          if [ "${COMMITTED}" = "${NPUB}" ]; then
+            echo "zapstore.yaml pubkey matches the signing identity."
+          else
+            echo "::error::zapstore.yaml pubkey does not match ZAPSTORE_SIGN_WITH."
+            echo "::error::  committed: ${COMMITTED}"
+            echo "::error::  signing:   ${NPUB}"
+            echo "::error::Commit the npub above, or the relay will reject every event."
+            exit 1
+          fi
