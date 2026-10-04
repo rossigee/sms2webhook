@@ -2,6 +2,32 @@ plugins {
     id 'com.android.application'
 }
 
+// Release signing is supplied by CI through these Gradle properties, or by
+// environment variables of the same name. They are deliberately absent from the
+// checked-in gradle.properties so no machine-specific path is committed.
+// When they are not supplied (local builds, pull request builds) the release
+// build type falls back to debug signing.
+def signingInput = { String name ->
+    providers.gradleProperty(name).orElse(providers.environmentVariable(name))
+}
+
+def releaseStoreFile = signingInput('RELEASE_STORE_FILE')
+def releaseStorePassword = signingInput('RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = signingInput('RELEASE_KEY_ALIAS')
+def releaseKeyPassword = signingInput('RELEASE_KEY_PASSWORD').orElse(releaseStorePassword)
+
+def suppliedSigningInputs = [releaseStoreFile, releaseStorePassword, releaseKeyAlias]
+        .findAll { it.isPresent() }
+def hasReleaseSigning = suppliedSigningInputs.size() == 3
+
+if (!suppliedSigningInputs.isEmpty() && !hasReleaseSigning) {
+    throw new GradleException(
+            'Incomplete release signing configuration. RELEASE_STORE_FILE, ' +
+            'RELEASE_STORE_PASSWORD and RELEASE_KEY_ALIAS must all be set, via ' +
+            'Gradle properties or environment variables. RELEASE_KEY_PASSWORD is ' +
+            'optional and defaults to RELEASE_STORE_PASSWORD.')
+}
+
 android {
     compileSdk 36
 
@@ -21,11 +47,22 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseStoreFile.get())
+                storePassword releaseStorePassword.get()
+                keyAlias releaseKeyAlias.get()
+                keyPassword releaseKeyPassword.get()
+            }
+        }
+    }
+
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.debug
+            signingConfig = hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
         }
     }
     compileOptions {
@@ -39,10 +76,14 @@ android {
     }
 
     lint {
-        abortOnError false
+        abortOnError = false
     }
-    namespace 'org.golder.sms2webhook'
+    namespace = 'org.golder.sms2webhook'
 
+}
+
+if (!hasReleaseSigning) {
+    logger.info('Release signing credentials not supplied; release builds will be signed with the debug key.')
 }
 
 dependencies {
@@ -66,7 +107,18 @@ dependencies {
     // Added for RecyclerView and SwipeRefreshLayout
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.2.0'
-    
+
+    // QR scanning for the server-issued setup code. ZXing is used rather than
+    // ML Kit deliberately: ML Kit's bundled scanner needs Google Play Services,
+    // which a self-hosted family app has no reason to depend on.
+    //
+    // zxing-android-embedded provides the capture UI. ScanContract defaults to the
+    // library's own embedded CaptureActivity, which is what SettingsFragment
+    // relies on - the bare ACTION_SCAN intent form would instead redirect to a
+    // Play Store install when no scanner app is present.
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    implementation 'com.google.zxing:core:3.5.4'
+
     // Unit testing
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.mockito:mockito-core:5.24.0'

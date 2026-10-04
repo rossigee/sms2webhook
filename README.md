@@ -77,8 +77,8 @@ Download the latest APK from the [Releases](https://github.com/rossigee/sms2webh
 git clone https://github.com/rossigee/sms2webhook.git
 cd sms2webhook
 
-# Build the APK (requires Java 17)
-export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+# Build the APK (requires Java 21)
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 ./gradlew assembleDebug
 
 # Install on connected device
