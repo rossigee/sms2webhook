@@ -19,7 +19,7 @@ SMS2Webhook is an Android application that monitors incoming SMS messages and fo
 ## Build and Development Commands
 
 ```bash
-# Set Java 17 for building
+# Set Java 21 for building (required by sourceCompatibility/targetCompatibility)
 export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 
 # Build the app
@@ -34,7 +34,7 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 # Clean build artifacts
 ./gradlew clean
 
-# Generate signed APK
+# Generate release APK (debug-key signed unless release signing is configured)
 ./gradlew assembleRelease
 
 # Debug installation script (includes logcat monitoring)
@@ -118,7 +118,20 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 - Test with both single and dual SIM devices
 - Ensure background processing works with Android's battery optimizations
 - Always wrap initialization code in try-catch blocks to prevent crashes
-- Use Java 17 for building (set JAVA_HOME if needed)
+- Use Java 21 for building (set JAVA_HOME if needed)
+
+### Gradle Module Layout
+
+The application module directory is `sms2webhook/`, not `app/`. Paths in build scripts,
+CI workflows and documentation must use `sms2webhook/build/...`. APK outputs are
+`sms2webhook/build/outputs/apk/{debug,release}/sms2webhook-{debug,release}.apk`.
+
+### Local Gradle Overrides
+
+Never commit `org.gradle.java.home` or signing credentials to `gradle.properties`.
+A machine-specific `org.gradle.java.home` breaks CI, which is what caused every
+`Android CI` run to fail with "Java home supplied is invalid". Put local overrides in
+`~/.gradle/gradle.properties` instead.
 
 ### Testing Considerations
 - No existing tests - consider adding when implementing new features
@@ -138,25 +151,37 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 
 ### GitHub Actions Workflows
 
-1. **release.yml** - Main release workflow triggered on version tags
-   - Builds both debug and release APKs
-   - Signs release APK using GitHub secrets
-   - Creates GitHub release with changelog
-   - Uploads both APKs as release artifacts
+1. **android.yml** - Continuous integration, triggered on push and pull requests
+   - Runs unit tests and lint, publishes error/warning counts in the job summary
+   - Publishes debug and release APKs as build artifacts
+   - Release APK from this workflow is debug-key signed
 
-2. **sign-apk-manual.yml** - Alternative manual signing workflow
-   - Handles keystore format conversion automatically
-   - Uses apksigner directly instead of GitHub Action
-   - More robust against keystore format issues
+2. **release.yml** - Main release workflow triggered on version tags
+   - Runs unit tests and builds both debug and release APKs
+   - Signs the release APK with the release key during `assembleRelease`
+   - Verifies the signature with `apksigner` before publishing
+   - Creates the GitHub release with changelog
 
-3. **test-keystore.yml** - Diagnostic workflow for keystore issues
-   - Tests keystore format and compatibility
-   - Attempts automatic conversion to PKCS12
-   - Outputs fixed keystore in base64 if successful
+3. **manual-build.yml** - On-demand builds via workflow dispatch
+   - Build type (debug/release/both), optional draft release creation
+   - Signs with the release key only when a release is being created
+
+4. **pr-check.yml** - Automated pull request review
+   - Lint summary, APK size report, hardcoded secret and plain HTTP scans
+   - Posts the results as a pull request comment (needs `pull-requests: write`)
+
+All workflows build with JDK 21 and reference the `sms2webhook/` module directory.
+
+Validate workflow changes with `actionlint -shellcheck= -pyflakes= .github/workflows/*.yml`.
 
 ### APK Signing Setup
 
-**IMPORTANT**: Never commit keystore files to the repository!
+**IMPORTANT**: Never commit keystore files or signing credentials to the repository!
+
+Signing is performed by Gradle, configured in `sms2webhook/build.gradle` from
+`RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and the optional
+`RELEASE_KEY_PASSWORD`. These are passed as environment variables by the workflows
+from the GitHub secrets below. See `.github/workflows/README.md` for details.
 
 1. Generate a keystore (if needed):
 ```bash
@@ -178,14 +203,11 @@ base64 release-keystore.jks
    - `SIGNING_KEY`: Base64-encoded keystore file
    - `ALIAS`: Key alias (e.g., "release-key")
    - `KEY_STORE_PASSWORD`: Keystore password
-   - `KEY_PASSWORD`: Key password (often same as keystore password)
+   - `KEY_PASSWORD`: Key password. Optional; defaults to `KEY_STORE_PASSWORD`
 
-### Keystore Troubleshooting
-
-If you encounter "Tag number over 30 is not supported" errors:
-1. Run the test-keystore.yml workflow to diagnose
-2. Consider regenerating the keystore in PKCS12 format
-3. Use the manual signing workflow as a fallback
+The keystore must be PKCS12 format. The "Tag number over 30 is not supported" error
+from `keytool` means the keystore is in the legacy JKS format; regenerate it as PKCS12
+with the `-storetype PKCS12` flag above.
 
 The `.gitignore` file is configured to exclude all keystore files:
 - `*.jks`
