@@ -20,7 +20,25 @@ def suppliedSigningInputs = [releaseStoreFile, releaseStorePassword, releaseKeyA
         .findAll { it.isPresent() }
 def hasReleaseSigning = suppliedSigningInputs.size() == 3
 
-if (!suppliedSigningInputs.isEmpty() && !hasReleaseSigning) {
+// The check below must not fire for tasks that cannot consume a signing config.
+// CI exports RELEASE_STORE_FILE to the whole job, so that the build steps can
+// find the keystore the decode step wrote, and every later step then sees one
+// supplied input and no others. Throwing on that would fail `test` and
+// `assembleDebug` over a release-only misconfiguration.
+//
+// This is an allow-list rather than a "does the name mention release" test,
+// because `build`, `assemble` and `check` all pull in release variants while
+// none of them name it. Anything not provably signing-independent is treated as
+// needing a complete configuration, so an incomplete one still fails loudly
+// rather than quietly producing a debug-signed release APK.
+def signingIndependentTasks = ['test', 'assembledebug', 'lintdebug',
+                              'connecteddebugandroidtest'] as Set
+def requestedTaskNames = gradle.startParameter.taskNames.collect {
+    it.substring(it.lastIndexOf(':') + 1).toLowerCase()
+}
+def needsReleaseSigning = !requestedTaskNames.every { signingIndependentTasks.contains(it) }
+
+if (!suppliedSigningInputs.isEmpty() && !hasReleaseSigning && needsReleaseSigning) {
     throw new GradleException(
             'Incomplete release signing configuration. RELEASE_STORE_FILE, ' +
             'RELEASE_STORE_PASSWORD and RELEASE_KEY_ALIAS must all be set, via ' +
