@@ -16,14 +16,6 @@
         android:name="android.hardware.camera"
         android:required="false" />
 
-    <!-- Package visibility for the QR scanner on Android 11+ (API 30+). Without
-         this the ZXing capture activity can fail to resolve. -->
-    <queries>
-        <intent>
-            <action android:name="com.google.zxing.client.android.SCAN" />
-        </intent>
-    </queries>
-
     <application
         android:name="org.golder.sms2webhook.MainApplication"
         android:icon="@mipmap/ic_launcher"
