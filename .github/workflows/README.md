@@ -71,8 +71,8 @@ not `app/`.
 - **Use**: Run after changing the secret, and again after moving to a bunker
   credential, to confirm the new credential works before it is trusted with a
   real release
-- **Requires**: at least one published GitHub Release, since the action resolves
-  the APK from the newest release asset
+- **No prerequisites**: builds a debug APK itself, so this can be run before any
+  release exists. The APK is only signed, never published
 
 ## Dependabot Configuration
 
