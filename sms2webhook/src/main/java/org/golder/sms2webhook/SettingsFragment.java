@@ -1,12 +1,19 @@
 package org.golder.sms2webhook;
 
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Patterns;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.annotation.Nullable;
 import androidx.preference.EditTextPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
+
+import com.journeyapps.barcodescanner.ScanContract;
+import com.journeyapps.barcodescanner.ScanIntentResult;
+import com.journeyapps.barcodescanner.ScanOptions;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,18 +23,33 @@ import java.util.concurrent.Executors;
  */
 public class SettingsFragment extends PreferenceFragmentCompat {
     private static final String TAG = SettingsFragment.class.getSimpleName();
+
     private ExecutorService executorService;
+
+    // Held so summaries can be refreshed after a QR scan writes to the shared
+    // preference store. Re-inflating the preference hierarchy would duplicate it.
+    private EditTextPreference webhookUrlPref;
+    private EditTextPreference apiKeyPref;
+
+    // Uses ZXing's own embedded CaptureActivity rather than the ACTION_SCAN
+    // intent: the intent form redirects to a Play Store install when no scanner
+    // app is present, which is not acceptable for a self-hosted family app.
+    private final ScanContract scanContract = new ScanContract();
+    private ActivityResultLauncher<ScanOptions> scanLauncher;
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.preferences, rootKey);
         executorService = Executors.newSingleThreadExecutor();
+
+        scanLauncher = registerForActivityResult(scanContract, this::onScanResult);
+
         setupPreferences();
     }
 
     private void setupPreferences() {
         // Setup webhook URL validation
-        EditTextPreference webhookUrlPref = findPreference("webhook_url");
+        webhookUrlPref = findPreference("webhook_url");
         if (webhookUrlPref != null) {
             webhookUrlPref.setOnPreferenceChangeListener((preference, newValue) -> {
                 String url = newValue.toString().trim();
@@ -44,7 +66,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 }
                 return true;
             });
-            
+
             // Update summary with current value
             webhookUrlPref.setSummaryProvider(preference -> {
                 String value = ((EditTextPreference) preference).getText();
@@ -53,7 +75,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         }
 
         // Setup API key preference
-        EditTextPreference apiKeyPref = findPreference("api_key");
+        apiKeyPref = findPreference("api_key");
         if (apiKeyPref != null) {
             apiKeyPref.setSummaryProvider(preference -> {
                 String value = ((EditTextPreference) preference).getText();
@@ -68,6 +90,78 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 testConnection();
                 return true;
             });
+        }
+
+        // Scan the server-issued setup QR code to fill in URL and API key
+        Preference scanPref = findPreference("scan_setup_qr");
+        if (scanPref != null) {
+            scanPref.setOnPreferenceClickListener(preference -> {
+                scanSetupQr();
+                return true;
+            });
+        }
+    }
+
+    /**
+     * Launch the QR scanner.
+     *
+     * <p>Guards on camera hardware first: the manifest declares the camera
+     * feature optional so the app still installs on devices without one, which
+     * means a missing camera has to be reported rather than thrown.
+     */
+    private void scanSetupQr() {
+        if (getContext() == null) {
+            return;
+        }
+        if (!getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)) {
+            Toast.makeText(getContext(), R.string.scan_camera_unavailable, Toast.LENGTH_LONG).show();
+            return;
+        }
+        ScanOptions options = new ScanOptions();
+        options.setDesiredBarcodeFormats(ScanOptions.QR_CODE);
+        options.setPrompt(getString(R.string.scan_qr_prompt));
+        options.setBeepEnabled(false);
+        options.setOrientationLocked(false);
+        scanLauncher.launch(options);
+    }
+
+    private void onScanResult(@Nullable ScanIntentResult result) {
+        if (result == null || result.getContents() == null) {
+            // Cancelled or dismissed - leave existing settings untouched.
+            return;
+        }
+
+        SetupPayload.ParseResult parsed = SetupPayload.parse(result.getContents());
+        if (!parsed.isSuccess()) {
+            Toast.makeText(getContext(), parsed.getError(), Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        if (!SetupPayload.save(requireContext(), parsed.getPayload())) {
+            Toast.makeText(getContext(), R.string.scan_failed_to_save, Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        refreshFromPreferences();
+        Toast.makeText(getContext(), R.string.scan_config_applied, Toast.LENGTH_LONG).show();
+    }
+
+    /**
+     * Re-read the shared preference store into the visible preferences so a scan
+     * is reflected immediately rather than on next visit.
+     */
+    private void refreshFromPreferences() {
+        if (webhookUrlPref != null && webhookUrlPref.getSharedPreferences() != null) {
+            String url = webhookUrlPref.getSharedPreferences().getString("webhook_url", "");
+            if (url != null && !url.equals(webhookUrlPref.getText())) {
+                webhookUrlPref.setText(url);
+            }
+        }
+        if (apiKeyPref != null && apiKeyPref.getSharedPreferences() != null) {
+            String key = apiKeyPref.getSharedPreferences().getString("api_key", "");
+            if (key != null && !key.equals(apiKeyPref.getText())) {
+                apiKeyPref.setText(key);
+            }
         }
     }
 
@@ -130,9 +224,9 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
     @Override
     public void onDestroy() {
-        super.onDestroy();
         if (executorService != null) {
             executorService.shutdown();
         }
+        super.onDestroy();
     }
 }

@@ -120,8 +120,13 @@ public class SmsStoreWorker extends Worker {
                     try {
                         statusCode = uploader.upload(json);
                         if (statusCode == HttpURLConnection.HTTP_OK) {
-                            Log.i(TAG, app.getString(R.string.uploaded_with_status_code, statusCode));
-                            app.addMessage(ref + ": " + app.getString(R.string.uploaded_with_status_code, statusCode));
+                            // A duplicate is still a success, but saying
+                            // "Uploaded" for it hides that nothing was stored.
+                            int messageResId = uploader.wasAlreadyExisted()
+                                    ? R.string.already_existed_on_server
+                                    : R.string.uploaded_with_status_code;
+                            Log.i(TAG, app.getString(messageResId, statusCode));
+                            app.addMessage(ref + ": " + app.getString(messageResId, statusCode));
                         } else if (statusCode >= 400) {
                             Log.e(TAG, app.getString(R.string.failed_with_status_code, statusCode));
                             app.addMessage(ref + ": " + app.getString(R.string.failed_with_status_code, statusCode) + " - aborting sync");

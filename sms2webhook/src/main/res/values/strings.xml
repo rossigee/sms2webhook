@@ -14,6 +14,7 @@
     <string name="processing">"Processing %s"</string>
     <string name="unable_to_move_cursor_to_watermark_position">Unable to move cursor to watermark position %d</string>
     <string name="uploaded_with_status_code">Uploaded (status code: %d)</string>
+    <string name="already_existed_on_server">Already on server, not stored again (status code: %d)</string>
     <string name="failed_with_status_code">Failed (status code: %d)</string>
     <string name="api_key">API key</string>
     <string name="sync_sms">Sync SMS</string>
@@ -37,4 +38,10 @@
     <string name="webhook_url_required">Please configure a webhook URL first</string>
     <string name="testing_connection">Testing connection…</string>
     <string name="connection_test_failed_generic">Connection test failed</string>
+    <string name="scan_setup_qr">Scan setup QR</string>
+    <string name="scan_setup_qr_summary">Fill in the endpoint and API key from the Odoo server</string>
+    <string name="scan_qr_prompt">Point the camera at the setup code on the Odoo server</string>
+    <string name="scan_config_applied">Setup applied — endpoint and API key saved</string>
+    <string name="scan_failed_to_save">Could not save the setup configuration</string>
+    <string name="scan_camera_unavailable">No camera is available on this device</string>
 </resources>

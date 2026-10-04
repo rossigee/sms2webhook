@@ -18,11 +18,18 @@
             android:inputType="textPassword"
             android:selectAllOnFocus="true" />
 
-        <Preference
-            android:key="test_connection"
-            android:title="@string/test_connection"
-            android:summary="Test webhook connection"
-            android:icon="@android:drawable/ic_menu_send" />
+          <Preference
+              android:key="scan_setup_qr"
+              android:title="@string/scan_setup_qr"
+              android:summary="@string/scan_setup_qr_summary"
+              android:icon="@android:drawable/ic_menu_camera" />
+
+          <Preference
+              android:key="test_connection"
+              android:title="@string/test_connection"
+              android:summary="Test webhook connection"
+              android:icon="@android:drawable/ic_menu_send" />
+
 
     </PreferenceCategory>
 
