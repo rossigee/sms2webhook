@@ -133,3 +133,21 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+
+      # Runs last: the action fetches the APK from the release asset created
+      # above, so this cannot run before the Create Release step.
+      #
+      # The credential is passed through the environment rather than `with:` so
+      # it never appears in the workflow file, and the action masks it with
+      # ::add-mask:: as soon as it reads it.
+      #
+      # skip-if-unconfigured keeps the release green before a Zapstore identity
+      # exists. Remove it once publishing is expected on every tag.
+      - name: Publish to Zapstore
+        uses: rossigee/zapstore-publish@main
+        env:
+          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config: zapstore.yaml
+          skip-if-unconfigured: 'true'

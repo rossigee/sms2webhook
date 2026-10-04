@@ -126,6 +126,30 @@ The application module directory is `sms2webhook/`, not `app/`. Paths in build s
 CI workflows and documentation must use `sms2webhook/build/...`. APK outputs are
 `sms2webhook/build/outputs/apk/{debug,release}/sms2webhook-{debug,release}.apk`.
 
+### Zapstore Publishing
+
+`release.yml` publishes the signed release APK to the
+[Zapstore](https://zapstore.dev) Nostr relay as its final step, driven by the
+`ZAPSTORE_SIGN_WITH` repository secret. The step is a no-op when that secret is
+unset, so releases are unaffected until it is configured.
+
+`zapstore.yaml` at the repo root is **required to be committed**. On the first
+publish the relay fetches it, verifies the `pubkey` field matches the signing
+key, and whitelists the publisher. An unpublished or mismatched `pubkey` means
+the release event is rejected.
+
+`ZAPSTORE_SIGN_WITH` accepts either an `nsec1...` or a NIP-46 `bunker://` URL.
+Prefer a bunker: it keeps the key off the runner, is revocable, and can be
+scoped to `sign_event` for this package. An `nsec` in the runner environment is
+readable by any action in the job and cannot be rotated without changing the
+publisher identity.
+
+Install path is `github.com/zapstore/zsp/cmd/zsp` — the module root is not a
+main package. `zapstore.yaml` pins `match` to `.*-release-signed\.apk$` so the
+debug asset attached to the same release is never published to users.
+
+Full setup steps are in `.github/workflows/README.md`.
+
 ### Local Gradle Overrides
 
 Never commit `org.gradle.java.home` or signing credentials to `gradle.properties`.
