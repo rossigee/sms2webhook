@@ -13,7 +13,6 @@ on:
     paths:
       - zapstore.yaml
       - .github/workflows/verify-zapstore-signing.yml
-  workflow_call:
 
 permissions:
   contents: read
@@ -31,6 +30,9 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
       # Proves the credential without needing a published release, which would
       # otherwise be a prerequisite and mean this check could not run until one
       # existed. The debug APK is only ever signed, never published, and mode
@@ -44,7 +46,7 @@ jobs:
 
       - name: Sign the release events
         id: sign
-        uses: rossigee/zapstore-publish@main
+        uses: rossigee/zapstore-publish@v1
         env:
           SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
