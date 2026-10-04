@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ master, develop ]
 
+permissions:
+  contents: read
+
 env:
   MODULE: sms2webhook
 
@@ -38,19 +41,9 @@ jobs:
 
       - name: Summarise lint results
         if: always()
-        env:
-          LINT_REPORT: ${{ env.MODULE }}/build/reports/lint-results-debug.xml
-        run: |
-          echo "## Lint Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f "$LINT_REPORT" ]; then
-            ERRORS=$(grep -o 'severity="Error"' "$LINT_REPORT" | wc -l)
-            WARNINGS=$(grep -o 'severity="Warning"' "$LINT_REPORT" | wc -l)
-            echo "- Errors: $ERRORS" >> $GITHUB_STEP_SUMMARY
-            echo "- Warnings: $WARNINGS" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- Report not generated" >> $GITHUB_STEP_SUMMARY
-          fi
+        uses: ./.github/actions/summarise-lint
+        with:
+          report-path: ${{ env.MODULE }}/build/reports/lint-results-debug.xml
 
       - name: Upload lint results
         if: always()
@@ -118,13 +111,15 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: sms2webhook-debug-${{ steps.commit.outputs.BRANCH_NAME }}-${{ steps.commit.outputs.COMMIT_SHORT }}
-          path: sms2webhook-*-debug.apk
+          path: sms2webhook-*-debug-*.apk
+          if-no-files-found: error
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v7
         with:
           name: sms2webhook-release-${{ steps.commit.outputs.BRANCH_NAME }}-${{ steps.commit.outputs.COMMIT_SHORT }}
-          path: sms2webhook-*-release.apk
+          path: sms2webhook-*-release-*.apk
+          if-no-files-found: error
 
       - name: Create build summary
         run: |

@@ -41,21 +41,10 @@ jobs:
 
       - name: Summarise lint results
         if: always()
-        env:
-          LINT_REPORT: ${{ env.MODULE }}/build/reports/lint-results-debug.xml
-        run: |
-          echo "### Lint Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f "$LINT_REPORT" ]; then
-            ERRORS=$(grep -o 'severity="Error"' "$LINT_REPORT" | wc -l)
-            WARNINGS=$(grep -o 'severity="Warning"' "$LINT_REPORT" | wc -l)
-            echo "- Errors: $ERRORS" >> $GITHUB_STEP_SUMMARY
-            echo "- Warnings: $WARNINGS" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Lint is configured with abortOnError false, so these do not block the pull request." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- Report not generated" >> $GITHUB_STEP_SUMMARY
-          fi
+        uses: ./.github/actions/summarise-lint
+        with:
+          report-path: ${{ env.MODULE }}/build/reports/lint-results-debug.xml
+          note: Lint is configured with abortOnError false, so these do not block the pull request.
 
       - name: APK size check
         run: |

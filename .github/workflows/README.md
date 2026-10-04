@@ -71,8 +71,11 @@ To enable APK signing in the release workflow:
 
 1. Generate a keystore (if you don't have one):
    ```bash
-   keytool -genkey -v -keystore release.keystore -alias sms2webhook -keyalg RSA -keysize 2048 -validity 10000
+   keytool -genkey -v -keystore release.keystore -storetype PKCS12 \
+     -alias sms2webhook -keyalg RSA -keysize 2048 -validity 10000
    ```
+   PKCS12 is required: Gradle reads the keystore as PKCS12, so a legacy JKS file
+   fails with "Tag number over 30 is not supported".
 
 2. Convert keystore to base64:
    ```bash

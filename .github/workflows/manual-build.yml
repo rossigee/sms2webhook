@@ -22,9 +22,6 @@ on:
         required: false
         type: string
 
-permissions:
-  contents: write
-
 env:
   MODULE: sms2webhook
 
@@ -55,15 +52,17 @@ jobs:
         if: ${{ inputs.create_release }}
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ALIAS }}
         run: |
           KEYSTORE="$RUNNER_TEMP/release-keystore.p12"
+          umask 077
           printf '%s' "$SIGNING_KEY" | base64 --decode > "$KEYSTORE"
-          keytool -list -keystore "$KEYSTORE" -storepass "${{ secrets.KEY_STORE_PASSWORD }}" -alias "${{ secrets.ALIAS }}"
+          # -storetype PKCS12 must match what Gradle reads the keystore with, or a
+          # legacy JKS file passes this check and then fails during assembleRelease.
+          keytool -list -storetype PKCS12 \
+            -keystore "$KEYSTORE" -storepass "$KEY_STORE_PASSWORD" -alias "$KEY_ALIAS"
           echo "RELEASE_STORE_FILE=$KEYSTORE" >> $GITHUB_ENV
-
-      - name: Remove signing keystore
-        if: always()
-        run: rm -f "$RUNNER_TEMP/release-keystore.p12"
 
       - name: Get version info
         id: version
@@ -88,13 +87,23 @@ jobs:
       - name: Build Release APK
         if: ${{ inputs.build_type == 'release' || inputs.build_type == 'both' }}
         env:
+          SIGN_WITH_RELEASE_KEY: ${{ inputs.create_release }}
           RELEASE_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          if [ "$SIGN_WITH_RELEASE_KEY" != "true" ]; then
+            # The keystore is only decoded when a release is being created, so these
+            # must not reach Gradle: a partial signing configuration fails the build.
+            unset RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD
+          fi
           ./gradlew assembleRelease --stacktrace
           mv "$MODULE/build/outputs/apk/release/sms2webhook-release.apk" \
              "sms2webhook-${{ steps.version.outputs.VERSION_NAME }}-release-${{ steps.version.outputs.TIMESTAMP }}.apk"
+
+      - name: Remove signing keystore
+        if: ${{ always() && !cancelled() }}
+        run: rm -f "$RUNNER_TEMP/release-keystore.p12"
 
       - name: Upload Debug APK
         if: ${{ inputs.build_type == 'debug' || inputs.build_type == 'both' }}
@@ -103,6 +112,7 @@ jobs:
           name: sms2webhook-debug-manual-${{ steps.version.outputs.TIMESTAMP }}
           path: sms2webhook-*-debug-*.apk
           retention-days: 30
+          if-no-files-found: error
 
       - name: Upload Release APK
         if: ${{ inputs.build_type == 'release' || inputs.build_type == 'both' }}
@@ -111,6 +121,7 @@ jobs:
           name: sms2webhook-release-manual-${{ steps.version.outputs.TIMESTAMP }}
           path: sms2webhook-*-release-*.apk
           retention-days: 30
+          if-no-files-found: error
 
       - name: Create Release
         if: ${{ inputs.create_release }}
@@ -148,6 +159,14 @@ jobs:
 
           if [ "${{ inputs.build_type }}" == "release" ] || [ "${{ inputs.build_type }}" == "both" ]; then
             echo "✅ Release APK built successfully" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ inputs.build_type }}" == "release" ] || [ "${{ inputs.build_type }}" == "both" ]; then
+            if [ "${{ inputs.create_release }}" == "true" ]; then
+              echo "🔑 Release APK is signed with the release key." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "⚠️ Release APK is signed with the DEBUG key, because create_release was not set." >> $GITHUB_STEP_SUMMARY
+            fi
           fi
 
           if [ "${{ inputs.create_release }}" == "true" ]; then
