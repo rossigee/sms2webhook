@@ -29,6 +29,24 @@ public class WebhookUploader {
 
     private boolean lastUploadAlreadyExisted = false;
 
+    /**
+     * Seconds the most recent response asked us to wait, from {@code Retry-After}.
+     *
+     * <p>Zero when the server did not send the header, or sent one that could not
+     * be understood. Only meaningful alongside a 429 or 503.
+     */
+    private int lastRetryAfterSeconds = 0;
+
+    /**
+     * Seconds the server asked us to wait before retrying the last request.
+     *
+     * @return the {@code Retry-After} delay in seconds, or 0 when absent or
+     *         unparseable
+     */
+    public int getRetryAfterSeconds() {
+        return lastRetryAfterSeconds;
+    }
+
     public WebhookUploader(String url, String apiKey) {
         this.webhookUrl = url;
         this.apiKey = apiKey;
@@ -104,6 +122,8 @@ public class WebhookUploader {
                 os.write(input, 0, input.length);
             }
             int responseCode = conn.getResponseCode();
+            lastRetryAfterSeconds =
+                    SmsStoreWorkerStatusHandling.retryAfterSeconds(conn.getHeaderField("Retry-After"));
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 lastUploadAlreadyExisted =
                         isAlreadyExistedHeader(conn.getHeaderField(HEADER_ALREADY_EXISTED));

@@ -142,6 +142,24 @@ public class SmsStoreWorker extends Worker {
                             Log.e(TAG, app.getString(R.string.failed_with_status_code, statusCode));
                             app.addMessage(ref + ": " + app.getString(R.string.failed_with_status_code, statusCode)
                                     + " - will retry");
+                            // Honour Retry-After rather than immediately re-hitting a
+                            // server that has asked us to slow down. Bounded, because
+                            // a worker thread is not ours to block indefinitely.
+                            int requested = Math.min(
+                                    uploader.getRetryAfterSeconds(),
+                                    SmsStoreWorkerStatusHandling.MAX_RETRY_AFTER_SECONDS);
+                            if (requested > 0) {
+                                Log.i(TAG, "Server asked for " + requested + "s before retrying; waiting");
+                                app.addMessage(ref + ": waiting " + requested + "s as the server requested");
+                                try {
+                                    Thread.sleep(requested * 1000L);
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    prefs.edit().putInt("watermark", app.getWatermark()).apply();
+                                    app.updateStats();
+                                    return Result.retry();
+                                }
+                            }
                             prefs.edit().putInt("watermark", app.getWatermark()).apply();
                             app.updateStats();
                             return Result.retry();

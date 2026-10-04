@@ -84,6 +84,22 @@ public class SmsStoreWorkerStatusHandlingTest {
     }
 
     @Test
+    public void retryAfterSeconds_isClampedToTheMaximumWait() {
+        // A server asking for an hour must not be able to pin a worker thread
+        // for an hour.
+        int huge = SmsStoreWorkerStatusHandling.retryAfterSeconds("86400");
+        assertEquals(SmsStoreWorkerStatusHandling.MAX_RETRY_AFTER_SECONDS,
+                Math.min(SmsStoreWorkerStatusHandling.MAX_RETRY_AFTER_SECONDS, huge));
+    }
+
+    @Test
+    public void noRetryAfterMeansNoWait() {
+        // The common case must not add latency: a plain 503 with no header
+        // retries on WorkManager's own schedule, not after a sleep.
+        assertEquals(0, SmsStoreWorkerStatusHandling.retryAfterSeconds(null));
+    }
+
+    @Test
     public void retryAfterSeconds_ignoresAPastDate() {
         String past = java.time.ZonedDateTime.now(java.time.ZoneOffset.UTC)
                 .minusMinutes(5)
