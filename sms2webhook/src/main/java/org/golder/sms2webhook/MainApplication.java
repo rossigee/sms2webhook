@@ -78,11 +78,22 @@ public class MainApplication extends Application {
     }
 
     public void updateStats() {
+        refreshStats(true);
+    }
+
+    /**
+     * Refreshes the displayed counts.
+     *
+     * @param withDiagnostics run the consistency checks, which append to the
+     *        activity log. Off for the periodic refresh during a sync so the
+     *        same finding is not reported once per batch of messages.
+     */
+    public void refreshStats(boolean withDiagnostics) {
         Context ctx = getApplicationContext();
         Handler handler = new Handler(ctx.getMainLooper());
         handler.post(() -> {
             if (mainActivity != null) {
-                mainActivity.updateStats(ctx);
+                mainActivity.refreshStats(withDiagnostics);
             }
         });
     }
@@ -93,6 +104,24 @@ public class MainApplication extends Application {
         handler.post(() -> {
             if (mainActivity != null) {
                 mainActivity.restoreMessages();
+            }
+        });
+    }
+
+    /**
+     * Reports how far a sync has got.
+     *
+     * <p>Separate from {@link #updateStats()} because that re-queries the cache
+     * and the SMS provider. Doing that per message made a sync spend its time in
+     * the database rather than uploading, and each result could be coalesced away
+     * by LiveData before it was ever drawn.
+     */
+    public void reportSyncProgress(int processed, int total) {
+        Context ctx = getApplicationContext();
+        Handler handler = new Handler(ctx.getMainLooper());
+        handler.post(() -> {
+            if (mainActivity != null) {
+                mainActivity.reportSyncProgress(processed, total);
             }
         });
     }

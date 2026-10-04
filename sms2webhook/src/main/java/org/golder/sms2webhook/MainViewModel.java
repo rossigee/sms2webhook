@@ -17,6 +17,7 @@ public class MainViewModel extends AndroidViewModel {
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isSyncing = new MutableLiveData<>();
     private final MutableLiveData<String> errorMessage = new MutableLiveData<>();
+    private final MutableLiveData<Integer> syncProgress = new MutableLiveData<>(0);
     
     private final List<LogEntry> logList = new ArrayList<>();
     private final Executor backgroundExecutor = Executors.newFixedThreadPool(2);
@@ -47,6 +48,28 @@ public class MainViewModel extends AndroidViewModel {
         return isSyncing;
     }
 
+    /** Full refresh including diagnostics, for UI-initiated loads. */
+    public void loadStatistics() {
+        loadStatistics(true);
+    }
+
+    /**
+     * Position within the current sync, as a percentage.
+     *
+     * <p>Reported straight from the worker rather than derived from the cached
+     * counts. Deriving it from sentCount meant the bar only moved when the cache
+     * was written, so it sat still for most of a sync and then jumped.
+     */
+    public LiveData<Integer> getSyncProgress() {
+        return syncProgress;
+    }
+
+    /** Called by the worker after each message. Cheap: no database access. */
+    public void reportSyncProgress(int processed, int total) {
+        int percent = total > 0 ? Math.min(100, (processed * 100) / total) : 0;
+        syncProgress.postValue(percent);
+    }
+
     public void setSyncing(boolean syncing) {
         isSyncing.postValue(syncing);
     }
@@ -67,8 +90,20 @@ public class MainViewModel extends AndroidViewModel {
         logs.postValue(new ArrayList<>(logList));
     }
 
-    public void loadStatistics() {
-        isLoading.setValue(true);
+    /**
+     * Refreshes the cached counts.
+     *
+     * @param withDiagnostics run the consistency checks. Off for the periodic
+     *        refresh during a sync: diagnostics append a log entry each time
+     *        they find something, so a sync refreshing every few dozen messages
+     *        filled the activity log with the same finding repeated.
+     */
+    public void loadStatistics(boolean withDiagnostics) {
+        // postValue rather than setValue: this method is also called from
+        // clearCache(), which runs on backgroundExecutor. setValue on a
+        // background thread throws, which is why clearing the cache silently
+        // failed with "Cannot invoke setValue on a background thread".
+        isLoading.postValue(true);
         backgroundExecutor.execute(() -> {
             try {
                 MainApplication app = getApplication();
@@ -76,8 +111,9 @@ public class MainViewModel extends AndroidViewModel {
                 int sentCount = app.sentCount;
                 int unsentCount = app.unsentCount;
                 
-                // Run diagnostics to check for inconsistencies
-                runDiagnostics();
+                if (withDiagnostics) {
+                    runDiagnostics();
+                }
                 
                 Statistics stats = new Statistics(totalCount, sentCount, unsentCount);
                 statistics.postValue(stats);
