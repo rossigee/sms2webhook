@@ -53,13 +53,7 @@ android {
         applicationId "org.golder.sms2webhook"
         minSdk 28
         targetSdk 36
-        // 5 is required to install over 2.1.0 at all: Android refuses an upgrade
-        // at an unchanged versionCode.
         versionCode 5
-        // Patch, not minor. Nothing in #80 adds functionality or changes the
-        // webhook payload; every change corrects a defect. 2.0.1 shipped an MVVM
-        // refactor as a patch, and 2.1.0 was a minor because it added QR setup
-        // pairing.
         versionName "2.1.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
