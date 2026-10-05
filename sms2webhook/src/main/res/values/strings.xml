@@ -16,6 +16,8 @@
     <string name="uploaded_with_status_code">Uploaded (status code: %d)</string>
     <string name="already_existed_on_server">Already on server, not stored again (status code: %d)</string>
     <string name="failed_with_status_code">Failed (status code: %d)</string>
+    <string name="already_handled_with_status_code">Already handled (status code: %d), skipping</string>
+    <string name="refused_by_server_with_status_code">Refused by server (status code: %d), not retrying</string>
     <string name="api_key">API key</string>
     <string name="sync_sms">Sync SMS</string>
     <string name="stop_sync">Stop Sync</string>
@@ -44,4 +46,5 @@
     <string name="scan_config_applied">Setup applied — endpoint and API key saved</string>
     <string name="scan_failed_to_save">Could not save the setup configuration</string>
     <string name="scan_camera_unavailable">No camera is available on this device</string>
+<string name="permissions_required_toast">SMS permission is needed to forward messages. Grant it in system settings.</string>
 </resources>

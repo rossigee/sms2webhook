@@ -1,10 +1,11 @@
 package org.golder.sms2webhook;
 
 import android.content.Context;
-
-import androidx.room.Room;
+import android.util.Log;
 
 public class DigestCache {
+    private static final String TAG = DigestCache.class.getSimpleName();
+
     private static CacheDatabase getDatabase(Context context) {
         return CacheDatabase.getInstance(context);
     }
@@ -14,31 +15,28 @@ public class DigestCache {
         db.cacheDao().insert(new CacheEntry(key, String.valueOf(value)));
     }
 
+    /**
+     * Looks up the recorded outcome for a message.
+     *
+     * @return the status of its last terminal outcome, or
+     *         {@link SmsStoreWorkerStatusHandling#TRANSPORT_FAILURE} when the message
+     *         has never been dealt with, which is also what an unreadable entry
+     *         reports
+     */
     public static int get(Context context, String key) {
         CacheDatabase db = getDatabase(context);
-        if(!db.cacheDao().exists(key)) {
-            return -1;
+        String value = db.cacheDao().get(key);
+        if (value == null) {
+            return SmsStoreWorkerStatusHandling.TRANSPORT_FAILURE;
         }
-        return Integer.parseInt(db.cacheDao().get(key));
-    }
-
-    public static int getSentCount(Context context) {
-        CacheDatabase db = getDatabase(context);
-        return db.cacheDao().getSent();
-    }
-
-    public static int getNotSentCount(Context context) {
-        CacheDatabase db = getDatabase(context);
-        return db.cacheDao().getNotSent();
-    }
-
-    public static void clear(Context context) {
-        CacheDatabase db = getDatabase(context);
-        Runnable r = new Runnable() {
-            public void run() {
-                db.cacheDao().clear();
-            }
-        };
-        new Thread(r).start();
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            // A single corrupt row must not abandon the whole sync. Reporting it as
+            // unrecorded re-attempts the message, which is the safe direction: a
+            // duplicate upload is recoverable, a dropped one is not.
+            Log.w(TAG, "Discarding unreadable cache entry: " + e.getMessage());
+            return SmsStoreWorkerStatusHandling.TRANSPORT_FAILURE;
+        }
     }
 }

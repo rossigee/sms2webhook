@@ -16,13 +16,21 @@
         android:name="android.hardware.camera"
         android:required="false" />
 
+    <!-- allowBackup and fullBackupContent cover API 28-30; dataExtractionRules
+         covers API 31+, where transfer is governed by the rules rather than by
+         allowBackup. All three are off because the webhook URL and its API key sit
+         in the default preference store in cleartext: a backup would export the
+         credential off the device. See res/xml/data_extraction_rules.xml. -->
     <application
         android:name="org.golder.sms2webhook.MainApplication"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SMS2Webhook">
+        android:theme="@style/Theme.SMS2Webhook"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
 
         <!-- Main activity with single top launch mode and exported -->
         <activity

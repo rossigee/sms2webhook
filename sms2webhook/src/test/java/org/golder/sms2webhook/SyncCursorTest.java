@@ -60,11 +60,26 @@ public class SyncCursorTest {
     }
 
     @Test
-    public void unauthorisedAndNotFoundAlsoAdvance() {
-        assertEquals(Outcome.ADVANCE, outcomeFor(401));
+    public void forbiddenAndUnprocessableAlsoAdvance() {
+        // These describe the payload, so the server will keep saying the same
+        // thing. Advancing is what lets the sync reach the messages behind it.
         assertEquals(Outcome.ADVANCE, outcomeFor(403));
-        assertEquals(Outcome.ADVANCE, outcomeFor(404));
+        assertEquals(Outcome.ADVANCE, outcomeFor(413));
         assertEquals(Outcome.ADVANCE, outcomeFor(422));
+    }
+
+    @Test
+    public void aMistypedKeyOrUrlHoldsRatherThanDiscarding() {
+        // 401 and 404 used to be grouped with the payload rejections above, which
+        // lost a backlog: the server answers 401 for an unrecognised API key and
+        // Odoo answers 404 when the URL misses its /sms/upload route, both of
+        // which the user then fixes in Settings. Advancing past the message marked
+        // it delivered-forever, so correcting the key uploaded none of them.
+        // Holding means WorkManager retries and the message is still there to send.
+        assertEquals(Outcome.HOLD, outcomeFor(401));
+        assertEquals(Outcome.HOLD, outcomeFor(404));
+        assertEquals(5, advance(5, outcomeFor(401)));
+        assertEquals(5, advance(5, outcomeFor(404)));
     }
 
     @Test
