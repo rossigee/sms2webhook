@@ -45,17 +45,17 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 
 ### Core Components
 
-1. **SmsBroadcastReceiver** (app/src/main/java/org/golder/sms2webhook/SmsBroadcastReceiver.java)
+1. **SmsBroadcastReceiver** (sms2webhook/src/main/java/org/golder/sms2webhook/SmsBroadcastReceiver.java)
    - Receives SMS_RECEIVED broadcasts
    - Extracts SMS data and queues for processing
    - Entry point for new messages
 
-2. **SmsStoreWorker** (app/src/main/java/org/golder/sms2webhook/SmsStoreWorker.java)
+2. **SmsStoreWorker** (sms2webhook/src/main/java/org/golder/sms2webhook/SmsStoreWorker.java)
    - WorkManager worker for background processing
    - Manages the upload queue and retry logic
    - Handles both new SMS and historical sync
 
-3. **WebhookUploader** (app/src/main/java/org/golder/sms2webhook/WebhookUploader.java)
+3. **WebhookUploader** (sms2webhook/src/main/java/org/golder/sms2webhook/WebhookUploader.java)
    - Handles HTTP communication with webhook
    - Implements retry logic and error handling
    - Sends SMS data as JSON with optional API key authentication
@@ -82,24 +82,52 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 5. On success, add to cache → CacheDatabase
 
 ### Webhook Format
+
+The payload is the SMS provider's own row, not a shape the app defines.
+`SmsStoreWorker.encodeMessage` copies every column the cursor returns, so the
+fields present depend on the device's messaging provider. On a typical device:
+
 ```json
 {
-  "from": "+1234567890",
-  "to": "+0987654321",
-  "text": "Message content",
-  "timestamp": 1234567890000,
-  "sim": 0,
-  "apiKey": "optional-api-key"
+  "_id": "2",
+  "thread_id": "2",
+  "address": "6505551212",
+  "date": 1724154171042,
+  "date_sent": 1724154170000,
+  "protocol": "0",
+  "read": "0",
+  "status": "-1",
+  "type": "1",
+  "reply_path_present": "0",
+  "body": "This is the message body",
+  "locked": "0",
+  "sub_id": "1",
+  "error_code": "0",
+  "creator": "com.google.android.apps.messaging",
+  "seen": "1"
 }
 ```
 
+Consequences worth knowing before changing anything here:
+
+- There is no `from`/`to`/`text`/`timestamp`/`sim` field. The sender is
+  `address`, the body is `body`, the time is `date`, and the SIM is `sub_id` —
+  and only where the provider exposes that column, which is not guaranteed for
+  the `content://sms` URI this app queries.
+- Values are strings, because `encodeMessage` reads every column with
+  `cursor.getString`. A consumer must not assume a numeric JSON type.
+- The query has no selection, so it covers the whole `sms` table including sent
+  messages, not just the inbox. Filter on `type` (1 = inbox) if that matters.
+- The API key is **not** in the body. It goes out as an
+  `Authorization: Bearer` header.
+
 ### Critical Files
-- Permissions handling: MainActivity.java:44-94
-- SMS reading logic: SmsStoreWorkerRunnable.java:88-159
-- Webhook upload: WebhookUploader.java:17-98
-- Database schema: CacheDatabase.java:15-25
-- ViewModel implementation: MainViewModel.java
-- Error handling: MainApplication.java:26-61
+- Permission handling: `MainActivity.requestSmsPermissionsIfNeeded`
+- Inbox query and per-message decision: `SmsStoreWorker.doWork`
+- Status classification: `SmsStoreWorkerStatusHandling`
+- Webhook upload: `WebhookUploader`
+- Database schema: `CacheDatabase.java`
+- ViewModel implementation: `MainViewModel.java`
 
 ## Development Guidelines
 

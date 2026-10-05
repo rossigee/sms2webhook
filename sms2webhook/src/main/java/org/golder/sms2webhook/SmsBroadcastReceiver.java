@@ -3,8 +3,6 @@ package org.golder.sms2webhook;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Handler;
-import android.os.Looper;
 import android.provider.Telephony;
 import android.telephony.SmsMessage;
 import android.util.Log;
@@ -29,10 +27,14 @@ public class SmsBroadcastReceiver extends BroadcastReceiver {
 
         String sender = messages[0].getDisplayOriginatingAddress();
 
-        MainApplication app = (MainApplication)context.getApplicationContext();
+        MainApplication app = (MainApplication) context.getApplicationContext();
         app.addMessage(context.getString(R.string.received_sms_from_s, sender));
 
-        Handler handler = new Handler(Looper.getMainLooper());
-        handler.post(new SmsStoreWorkerRunnable(context));
+        // Enqueued here rather than posted to the main looper. A manifest-declared
+        // receiver returns as soon as onReceive finishes and nothing afterwards
+        // keeps the process alive, so a posted runnable could be dropped and the
+        // message never forwarded. WorkManager.enqueue is thread-safe and does not
+        // block, so running it inline is what makes the request durable.
+        new SmsStoreWorkerRunnable(context.getApplicationContext()).run();
     }
 }

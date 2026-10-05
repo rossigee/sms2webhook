@@ -32,6 +32,16 @@ public class SmsStoreWorkerStatusHandlingTest {
                 SmsStoreWorkerStatusHandling.isTransient(status));
     }
 
+    private void assertTerminal(int status) {
+        assertTrue("status " + status + " should not be uploaded again",
+                SmsStoreWorkerStatusHandling.isTerminal(status));
+    }
+
+    private void assertNotTerminal(int status) {
+        assertFalse("status " + status + " should still be attempted",
+                SmsStoreWorkerStatusHandling.isTerminal(status));
+    }
+
     @Test
     public void serverFaults_areTransient() {
         assertTransient(500);
@@ -42,11 +52,25 @@ public class SmsStoreWorkerStatusHandlingTest {
 
     @Test
     public void clientRejections_arePermanent() {
+        // These describe the payload, so the same message gets the same answer
+        // forever and re-sending it only burns battery and bandwidth.
         assertPermanent(HttpURLConnection.HTTP_BAD_REQUEST);      // 400
-        assertPermanent(HttpURLConnection.HTTP_UNAUTHORIZED);     // 401
         assertPermanent(HttpURLConnection.HTTP_FORBIDDEN);        // 403
-        assertPermanent(HttpURLConnection.HTTP_NOT_FOUND);        // 404
+        assertPermanent(413);
         assertPermanent(422);
+    }
+
+    @Test
+    public void configurationFailures_areRetryable() {
+        // Not payload rejections. The reference server answers 401 for a missing,
+        // malformed or unknown API key, and Odoo answers 404 when the URL misses
+        // its /sms/upload route. Both are corrected by the user in Settings, after
+        // which the very same message uploads cleanly, so treating either as final
+        // would silently lose a backlog the first time a key was mistyped.
+        assertTransient(HttpURLConnection.HTTP_UNAUTHORIZED);    // 401
+        assertTransient(HttpURLConnection.HTTP_NOT_FOUND);        // 404
+        assertTrue(SmsStoreWorkerStatusHandling.abortsSync(401));
+        assertTrue(SmsStoreWorkerStatusHandling.abortsSync(404));
     }
 
     @Test
@@ -131,5 +155,94 @@ public class SmsStoreWorkerStatusHandlingTest {
     @Test
     public void aTransientFailureDoesAbortTheRun() {
         assertTrue(SmsStoreWorkerStatusHandling.abortsSync(503));
+    }
+
+    @Test
+    public void anySuccess_isSuccess() {
+        // The whole 2xx range counts as delivered. Comparing against 200 exactly
+        // reported a 201 or 204 as a failed upload.
+        assertTrue(SmsStoreWorkerStatusHandling.isSuccess(200));
+        assertTrue(SmsStoreWorkerStatusHandling.isSuccess(HttpURLConnection.HTTP_CREATED));
+        assertTrue(SmsStoreWorkerStatusHandling.isSuccess(HttpURLConnection.HTTP_ACCEPTED));
+        assertTrue(SmsStoreWorkerStatusHandling.isSuccess(HttpURLConnection.HTTP_NO_CONTENT));
+        assertTrue(SmsStoreWorkerStatusHandling.isSuccess(299));
+    }
+
+    @Test
+    public void nonSuccess_isNotSuccess() {
+        assertFalse(SmsStoreWorkerStatusHandling.isSuccess(199));
+        assertFalse(SmsStoreWorkerStatusHandling.isSuccess(300));
+        assertFalse(SmsStoreWorkerStatusHandling.isSuccess(HttpURLConnection.HTTP_BAD_REQUEST));
+        assertFalse(SmsStoreWorkerStatusHandling.isSuccess(503));
+        assertFalse(SmsStoreWorkerStatusHandling.isSuccess(SmsStoreWorkerStatusHandling.TRANSPORT_FAILURE));
+    }
+
+    @Test
+    public void deliveredMessages_areTerminal() {
+        assertTerminal(200);
+        assertTerminal(201);
+        assertTerminal(204);
+    }
+
+    @Test
+    public void permanentlyRefusedMessages_areTerminal() {
+        // The regression. A 4xx describing the payload used to be recorded but
+        // never consulted, because the sync skipped only on an exact 200, so these
+        // were re-sent on every single sync for the life of the install.
+        assertTerminal(HttpURLConnection.HTTP_BAD_REQUEST);
+        assertTerminal(HttpURLConnection.HTTP_FORBIDDEN);
+        assertTerminal(413);
+        assertTerminal(422);
+    }
+
+    @Test
+    public void configurationFailures_areNotTerminal() {
+        // The inverse: 401 and 404 say the app is misconfigured, not that the
+        // message is undeliverable. Caching them as done loses the message for good
+        // once the user fixes the key or the URL.
+        assertNotTerminal(HttpURLConnection.HTTP_UNAUTHORIZED);
+        assertNotTerminal(HttpURLConnection.HTTP_NOT_FOUND);
+    }
+
+    @Test
+    public void transientOutcomes_areNotTerminal() {
+        // Nothing was dealt with, so the message must be attempted again.
+        assertNotTerminal(401);
+        assertNotTerminal(404);
+        assertNotTerminal(408);
+        assertNotTerminal(425);
+        assertNotTerminal(429);
+        assertNotTerminal(500);
+        assertNotTerminal(502);
+        assertNotTerminal(503);
+        assertNotTerminal(504);
+    }
+
+    @Test
+    public void aMissingCacheEntry_isNotTerminal() {
+        // Both of these mean "no outcome recorded", never "already finished", so
+        // neither may suppress an upload.
+        assertNotTerminal(SmsStoreWorkerStatusHandling.TRANSPORT_FAILURE);
+        assertNotTerminal(0);
+    }
+
+    @Test
+    public void anUnansweredRedirect_isTerminal() {
+        // A redirect is a misconfigured endpoint, so it will keep happening. Left
+        // non-terminal it was re-requested on every sync.
+        assertTerminal(301);
+        assertTerminal(302);
+        assertTerminal(307);
+    }
+    @Test
+    public void everyStatusClassIsEitherTerminalOrRetryable() {
+        // Nothing may fall between the two: an outcome that is neither would be
+        // recorded and then re-attempted forever.
+        for (int status = 100; status <= 599; status++) {
+            boolean terminal = SmsStoreWorkerStatusHandling.isTerminal(status);
+            boolean retryable = SmsStoreWorkerStatusHandling.isTransient(status);
+            assertTrue("status " + status + " is neither terminal nor transient",
+                    terminal ^ retryable);
+        }
     }
 }

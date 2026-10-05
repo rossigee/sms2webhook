@@ -1,80 +1,28 @@
 package org.golder.sms2webhook;
 
 import android.app.Application;
-import android.content.Context;
-import android.content.SharedPreferences;
-import android.database.Cursor;
 import android.os.Handler;
-import android.provider.Telephony;
 
-import java.util.ArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import androidx.preference.PreferenceManager;
-
+/**
+ * Bridges the sync worker, which runs off the main thread, to the activity.
+ *
+ * <p>The activity reference is dropped in {@code MainActivity.onDestroy}. Holding
+ * it for the life of the process leaked the activity and every view it owns, and
+ * because every method below posts to the main looper and dereferences it, a
+ * destroyed activity kept receiving callbacks.
+ */
 public class MainApplication extends Application {
+
+    /**
+     * Bound to the main looper once. Allocating a Handler per call meant a fresh
+     * allocation for every log line of every synced message.
+     */
+    private static final Handler MAIN_HANDLER = new Handler(android.os.Looper.getMainLooper());
+
     private MainActivity mainActivity;
-
-    private final AtomicInteger watermark = new AtomicInteger(0);
-
-    int inboxCount = 0;
-    int sentCount = 0;
-    int unsentCount = 0;
-
-    private final ArrayList<String> messages = new ArrayList<>();
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-
-        Context ctx = getApplicationContext();
-
-        try {
-            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ctx);
-            watermark.set(prefs.getInt("watermark", 0));
-        } catch (Exception e) {
-            android.util.Log.e("MainApplication", "Failed to get preferences: " + e.getMessage());
-            watermark.set(0);
-        }
-
-        new Thread(() -> {
-            try {
-                try (Cursor cursor = getContentResolver().query(Telephony.Sms.CONTENT_URI, null, null, null, "_id")) {
-                    if (cursor != null) {
-                        inboxCount = cursor.getCount();
-                    }
-                }
-            } catch (Exception e) {
-                android.util.Log.e("MainApplication", "Failed to query SMS: " + e.getMessage());
-                inboxCount = 0;
-            }
-
-            try {
-                sentCount = DigestCache.getSentCount(ctx);
-                unsentCount = DigestCache.getNotSentCount(ctx);
-            } catch (Exception e) {
-                android.util.Log.e("MainApplication", "Failed to get cache counts: " + e.getMessage());
-                sentCount = 0;
-                unsentCount = 0;
-            }
-        }).start();
-    }
 
     public void setMainActivity(MainActivity mainActivity) {
         this.mainActivity = mainActivity;
-    }
-
-    public String[] getMessages() {
-        return messages.toArray(new String[0]);
-    }
-
-    public void setWatermark(int level) {
-        watermark.set(level);
-        updateStats();
-    }
-
-    public int getWatermark() {
-        return watermark.get();
     }
 
     public void updateStats() {
@@ -89,21 +37,10 @@ public class MainApplication extends Application {
      *        same finding is not reported once per batch of messages.
      */
     public void refreshStats(boolean withDiagnostics) {
-        Context ctx = getApplicationContext();
-        Handler handler = new Handler(ctx.getMainLooper());
-        handler.post(() -> {
-            if (mainActivity != null) {
-                mainActivity.refreshStats(withDiagnostics);
-            }
-        });
-    }
-
-    public void restoreMessages() {
-        Context ctx = getApplicationContext();
-        Handler handler = new Handler(ctx.getMainLooper());
-        handler.post(() -> {
-            if (mainActivity != null) {
-                mainActivity.restoreMessages();
+        MAIN_HANDLER.post(() -> {
+            MainActivity activity = mainActivity;
+            if (activity != null) {
+                activity.refreshStats(withDiagnostics);
             }
         });
     }
@@ -117,22 +54,19 @@ public class MainApplication extends Application {
      * by LiveData before it was ever drawn.
      */
     public void reportSyncProgress(int processed, int total) {
-        Context ctx = getApplicationContext();
-        Handler handler = new Handler(ctx.getMainLooper());
-        handler.post(() -> {
-            if (mainActivity != null) {
-                mainActivity.reportSyncProgress(processed, total);
+        MAIN_HANDLER.post(() -> {
+            MainActivity activity = mainActivity;
+            if (activity != null) {
+                activity.reportSyncProgress(processed, total);
             }
         });
     }
 
     public void addMessage(String line) {
-        messages.add(line);
-        Context ctx = getApplicationContext();
-        Handler handler = new Handler(ctx.getMainLooper());
-        handler.post(() -> {
-            if (mainActivity != null) {
-                mainActivity.addMessage(line);
+        MAIN_HANDLER.post(() -> {
+            MainActivity activity = mainActivity;
+            if (activity != null) {
+                activity.addMessage(line);
             }
         });
     }
