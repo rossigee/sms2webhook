@@ -91,4 +91,4 @@ release_notes: ./CHANGELOG.md
 # ZAPSTORE_SIGN_WITH credential at publish time and writes it here. The exception
 # is a NIP-46 bunker credential, whose identity is only known after connecting,
 # which must be pasted in manually.
-pubkey: REPLACE_WITH_YOUR_NPUB
+pubkey: npub1u0rdn4g56a90us8lhwf7vkwtxngun29ar6z0vra2u3f94fs5y0ysezjz7e

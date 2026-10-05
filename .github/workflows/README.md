@@ -24,7 +24,8 @@ not `app/`.
   Only tagged releases (`release.yml`) are signed with the release key.
 
 ### 2. Release (`release.yml`)
-- **Triggers**: Push of tags matching `v*` (e.g., `v1.2.0`)
+- **Triggers**: Push of tags matching `v[0-9]+.[0-9]+.[0-9]+` (e.g., `v1.2.0`).
+  A tag that is not semver, such as `v-next` or `v2.1.0-rc1`, is ignored.
 - **Purpose**: Create official releases with signed APKs
 - **Outputs**:
   - GitHub Release with changelog
@@ -71,8 +72,8 @@ not `app/`.
 - **Use**: Run after changing the secret, and again after moving to a bunker
   credential, to confirm the new credential works before it is trusted with a
   real release
-- **Requires**: at least one published GitHub Release, since the action resolves
-  the APK from the newest release asset
+- **No prerequisites**: builds a debug APK itself, so this can be run before any
+  release exists. The APK is only signed, never published
 
 ## Dependabot Configuration
 

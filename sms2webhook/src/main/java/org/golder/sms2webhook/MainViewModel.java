@@ -1,6 +1,8 @@
 package org.golder.sms2webhook;
 
 import android.app.Application;
+import android.database.Cursor;
+import android.provider.Telephony;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.lifecycle.AndroidViewModel;
@@ -12,14 +14,30 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 public class MainViewModel extends AndroidViewModel {
+    private static final String TAG = MainViewModel.class.getSimpleName();
+
+    /** Ceiling on the retained activity log, so a long sync cannot grow it forever. */
+    private static final int MAX_LOG_ENTRIES = 1000;
+
     private final MutableLiveData<List<LogEntry>> logs = new MutableLiveData<>();
     private final MutableLiveData<Statistics> statistics = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isSyncing = new MutableLiveData<>();
     private final MutableLiveData<String> errorMessage = new MutableLiveData<>();
     private final MutableLiveData<Integer> syncProgress = new MutableLiveData<>(0);
-    
+
+    /**
+     * Newest entry first.
+     *
+     * <p>Guarded by {@link #logLock} because it is written from the main thread and
+     * from {@link #backgroundExecutor} threads at the same time: the diagnostics run
+     * inside a statistics load and append entries of their own. Mutating and copying
+     * an unsynchronised ArrayList from two threads throws, which is how a sync that
+     * reported a finding could take the app down.
+     */
     private final List<LogEntry> logList = new ArrayList<>();
+    private final Object logLock = new Object();
+
     private final Executor backgroundExecutor = Executors.newFixedThreadPool(2);
     private final CacheDatabase cacheDatabase;
 
@@ -80,14 +98,38 @@ public class MainViewModel extends AndroidViewModel {
 
     public void addLogEntry(String message, LogEntry.Type type) {
         LogEntry entry = new LogEntry(message, type, System.currentTimeMillis());
-        logList.add(0, entry); // Add to top
-        
-        // Limit log size to prevent memory issues
-        if (logList.size() > 1000) {
-            logList.remove(logList.size() - 1);
+
+        List<LogEntry> snapshot;
+        synchronized (logLock) {
+            logList.add(0, entry); // Add to top
+            snapshot = snapshotOf(logList);
         }
-        
-        logs.postValue(new ArrayList<>(logList));
+
+        logs.postValue(snapshot);
+    }
+
+    /**
+     * A copy of the log, newest first, capped at {@link #MAX_LOG_ENTRIES}.
+     *
+     * <p>Copies rather than exposing {@code logList}, which has to be copied anyway:
+     * {@code ArrayList.toArray} walks the backing array by index, so taking one from
+     * a list another thread is inserting into throws. The cap drops the oldest
+     * entries, so a long sync cannot grow the log without bound.
+     *
+     * <p>Must be called while holding {@link #logLock}.
+     */
+    static List<LogEntry> snapshotOf(List<LogEntry> logList) {
+        int size = Math.min(logList.size(), MAX_LOG_ENTRIES);
+        return new ArrayList<>(logList.subList(0, size));
+    }
+
+    /**
+     * Called once the current error has been shown, so a rotation does not replay
+     * it. Not called from the background task that raises it: two postValue calls
+     * in a row coalesce, so the error would never be delivered at all.
+     */
+    public void clearError() {
+        errorMessage.setValue(null);
     }
 
     /**
@@ -106,15 +148,19 @@ public class MainViewModel extends AndroidViewModel {
         isLoading.postValue(true);
         backgroundExecutor.execute(() -> {
             try {
-                MainApplication app = getApplication();
-                int totalCount = app.inboxCount;
-                int sentCount = app.sentCount;
-                int unsentCount = app.unsentCount;
-                
+                // Queried here rather than read from fields cached on the
+                // Application object. Those were populated once at process start and
+                // never written again, so the dashboard showed the same three numbers
+                // for the whole life of the process no matter how much was uploaded,
+                // and "Clear cache" appeared to do nothing.
+                int totalCount = countMessages();
+                int sentCount = cacheDatabase.cacheDao().getSent();
+                int unsentCount = cacheDatabase.cacheDao().getNotSent();
+
                 if (withDiagnostics) {
-                    runDiagnostics();
+                    runDiagnostics(totalCount, sentCount, unsentCount);
                 }
-                
+
                 Statistics stats = new Statistics(totalCount, sentCount, unsentCount);
                 statistics.postValue(stats);
                 isLoading.postValue(false);
@@ -124,38 +170,49 @@ public class MainViewModel extends AndroidViewModel {
             }
         });
     }
-    
-    private void runDiagnostics() {
+
+    /**
+     * How many messages the provider is holding.
+     *
+     * <p>Returns 0 rather than throwing when the SMS permission has been refused,
+     * so a dashboard load on a device without permission still renders.
+     */
+    private int countMessages() {
+        try (Cursor cursor = getApplication().getContentResolver().query(
+                Telephony.Sms.CONTENT_URI, null, null, null, "_id")) {
+            return cursor == null ? 0 : cursor.getCount();
+        } catch (Exception e) {
+            Log.w(TAG, "Could not count messages: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private void runDiagnostics(int storeCount, int sentCount, int unsentCount) {
         try {
             int uniqueCount = cacheDatabase.cacheDao().getUniqueCount();
             int totalCacheEntries = cacheDatabase.cacheDao().getTotalCount();
-            int sentCount = cacheDatabase.cacheDao().getSent();
-            int unsentCount = cacheDatabase.cacheDao().getNotSent();
-            
-            MainApplication app = getApplication();
-            int storeCount = app.inboxCount;
-            
+
             // Check for duplicates
             if (totalCacheEntries > uniqueCount) {
                 int duplicates = totalCacheEntries - uniqueCount;
                 addLogEntry("⚠️ Found " + duplicates + " duplicate cache entries", LogEntry.Type.WARNING);
             }
-            
+
             // Check for missing entries
-            int accountedFor = sentCount + unsentCount;
             if (storeCount > uniqueCount) {
                 int missing = storeCount - uniqueCount;
                 addLogEntry("ℹ️ " + missing + " messages have no cache entry", LogEntry.Type.INFO);
             }
-            
+
             // Check for inconsistencies
+            int accountedFor = sentCount + unsentCount;
             if (accountedFor != uniqueCount && totalCacheEntries == uniqueCount) {
-                addLogEntry("⚠️ Cache inconsistency detected: " + uniqueCount + " unique messages, but " + 
+                addLogEntry("⚠️ Cache inconsistency detected: " + uniqueCount + " unique messages, but " +
                            sentCount + " sent + " + unsentCount + " unsent", LogEntry.Type.WARNING);
             }
         } catch (Exception e) {
             // Diagnostics failed, but don't break the app
-            Log.e("MainViewModel", "Diagnostics failed", e);
+            Log.e(TAG, "Diagnostics failed", e);
         }
     }
 

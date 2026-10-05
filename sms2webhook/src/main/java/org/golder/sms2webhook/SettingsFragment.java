@@ -1,5 +1,6 @@
 package org.golder.sms2webhook;
 
+import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Patterns;
@@ -171,54 +172,58 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void testConnection() {
-        EditTextPreference webhookUrlPref = findPreference("webhook_url");
-        EditTextPreference apiKeyPref = findPreference("api_key");
-        
         if (webhookUrlPref == null) return;
-        
+
         String webhookUrl = webhookUrlPref.getText();
         String apiKey = apiKeyPref != null ? apiKeyPref.getText() : null;
-        
+
         if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
             Toast.makeText(getContext(), R.string.webhook_url_required, Toast.LENGTH_SHORT).show();
             return;
         }
-        
+
         if (!isValidUrl(webhookUrl)) {
             Toast.makeText(getContext(), R.string.invalid_url, Toast.LENGTH_SHORT).show();
             return;
         }
 
         Toast.makeText(getContext(), R.string.testing_connection, Toast.LENGTH_SHORT).show();
-        
+
         // Run test in background
         executorService.execute(() -> {
+            boolean succeeded = false;
+            String failureDetail = null;
             try {
-                // Create test webhook uploader
                 WebhookUploader uploader = new WebhookUploader(webhookUrl, apiKey);
-                
-                // Test with empty data
                 String testData = "{\"test\": true, \"timestamp\": " + System.currentTimeMillis() + "}";
-                boolean success = uploader.upload(testData);
-                
-                // Update UI on main thread
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> {
-                        if (success) {
-                            Toast.makeText(getContext(), R.string.connection_test_success, Toast.LENGTH_LONG).show();
-                        } else {
-                            Toast.makeText(getContext(), R.string.connection_test_failed_generic, Toast.LENGTH_LONG).show();
-                        }
-                    });
-                }
+                succeeded = uploader.upload(testData);
             } catch (Exception e) {
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> {
-                        String message = getString(R.string.connection_test_failed, e.getMessage());
-                        Toast.makeText(getContext(), message, Toast.LENGTH_LONG).show();
-                    });
-                }
+                failureDetail = e.getMessage() == null ? e.toString() : e.getMessage();
             }
+
+            // Hand the outcome back as data and resolve the message on the main
+            // thread. Reading a string resource from here would run against a
+            // fragment that may already be detached, which throws on the main
+            // thread out of a callback the user never initiated.
+            Activity activity = getActivity();
+            if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+                return;
+            }
+
+            String message;
+            if (succeeded) {
+                message = getString(R.string.connection_test_success);
+            } else if (failureDetail != null) {
+                message = getString(R.string.connection_test_failed, failureDetail);
+            } else {
+                message = getString(R.string.connection_test_failed_generic);
+            }
+
+            activity.runOnUiThread(() -> {
+                if (isAdded()) {
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                }
+            });
         });
     }
 

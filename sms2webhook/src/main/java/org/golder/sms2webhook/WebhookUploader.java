@@ -24,6 +24,25 @@ public class WebhookUploader {
      */
     static final String HEADER_ALREADY_EXISTED = "X-Already-Existed";
 
+    /**
+     * How long to wait for the webhook to accept a connection.
+     *
+     * <p>Deliberately set, because the platform default is zero, which means no
+     * limit at all: a host that completes the TCP handshake and then never answers
+     * would block the worker forever, and the sync's stop check would never be
+     * reached.
+     */
+    private static final int CONNECT_TIMEOUT_MS = 15_000;
+
+    /**
+     * How long to wait for the webhook to finish responding.
+     *
+     * <p>Also required to be non-zero, for the same reason. It only has to outlast
+     * the server thinking about the request: the payload is a few hundred bytes of
+     * JSON, so the write is not what needs the allowance.
+     */
+    private static final int READ_TIMEOUT_MS = 30_000;
+
     private final String webhookUrl;
     private final String apiKey;
 
@@ -112,7 +131,7 @@ public class WebhookUploader {
         try {
             conn = getHttpURLConnection(webhookUrl);
             conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json; utf-8");
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             if (apiKey != null && !apiKey.isEmpty()) {
                 conn.setRequestProperty("Authorization", String.format("Bearer %s", apiKey));
             }
@@ -151,7 +170,10 @@ public class WebhookUploader {
     private static HttpURLConnection getHttpURLConnection(String webhookUrl) throws MalformedURLException, WebhookUploadException {
         URL url = new URL(webhookUrl);
         try {
-            return (HttpURLConnection) url.openConnection();
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            conn.setReadTimeout(READ_TIMEOUT_MS);
+            return conn;
         } catch (IOException e) {
             throw new WebhookUploadException("Error opening connection to webhook URL: " + e.getMessage(), e);
         }

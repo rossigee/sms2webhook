@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Excludes everything from both cloud backup and device-to-device transfer.
+
+  The default preference store holds the webhook URL and its API key in
+  cleartext, so backing the app up would export the credential to whatever
+  performs the backup. The SMS digest cache is excluded for a second reason: it
+  is keyed by a hash that includes the provider's per-install row id, so it would
+  not match anything on the receiving device anyway.
+
+  android:allowBackup="false" covers API 28-30. These rules cover API 31+, where
+  transfer is governed by dataExtractionRules rather than by allowBackup.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

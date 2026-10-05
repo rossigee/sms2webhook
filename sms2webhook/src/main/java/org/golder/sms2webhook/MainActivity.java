@@ -51,27 +51,31 @@ public class MainActivity extends AppCompatActivity {
     private MaterialButton syncButton;
     private MaterialButton stopSyncButton;
 
-    private boolean uiInitialized = false;
     private final Map<UUID, WorkInfo.State> workStates = new HashMap<>();
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            boolean allGranted = grantResults.length > 0;
-            for (int i = 0; i < permissions.length; i++) {
-                if (grantResults[i] == PackageManager.PERMISSION_DENIED) {
-                    allGranted = false;
-                    Log.e(TAG, "Permission: " + permissions[i] + " was denied.");
-                    viewModel.addLogEntry("ERROR: Permission: " + permissions[i] + " was denied.",
-                            MainViewModel.LogEntry.Type.ERROR);
-                }
-            }
-            if (allGranted && !uiInitialized) {
-                initializeUI();
+        if (requestCode != PERMISSION_REQUEST_CODE) {
+            return;
+        }
+        boolean allGranted = grantResults.length > 0;
+        for (int i = 0; i < permissions.length; i++) {
+            if (grantResults[i] == PackageManager.PERMISSION_DENIED) {
+                allGranted = false;
+                Log.e(TAG, "Permission: " + permissions[i] + " was denied.");
+                viewModel.addLogEntry("ERROR: Permission: " + permissions[i] + " was denied.",
+                        MainViewModel.LogEntry.Type.ERROR);
             }
         }
+        if (!allGranted) {
+            // The UI is already built, so the reason is visible and the user can
+            // reach Settings. Previously this left no window content at all.
+            viewModel.addLogEntry(getString(R.string.permissions_required_toast),
+                    MainViewModel.LogEntry.Type.WARNING);
+        }
+        viewModel.loadStatistics();
     }
 
     @Override
@@ -84,22 +88,36 @@ public class MainActivity extends AppCompatActivity {
             MainApplication mainApplication = (MainApplication) getApplication();
             mainApplication.setMainActivity(this);
 
-            if (checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_DENIED) {
-                requestPermissions(
-                        new String[]{
-                                Manifest.permission.RECEIVE_SMS,
-                                Manifest.permission.READ_SMS
-                        },
-                        PERMISSION_REQUEST_CODE
-                );
-                return;
-            }
-
+            // Built unconditionally. Gating this on the SMS permissions left a
+            // blank window when they were denied, with no toolbar, no settings and
+            // no way to ask again from inside the app.
             initializeUI();
+
+            requestSmsPermissionsIfNeeded();
         } catch (Exception e) {
             Log.e(TAG, "Error in onCreate: " + e.getMessage(), e);
             Toast.makeText(this, "Failed to initialize app: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
+    }
+
+    private boolean hasSmsPermissions() {
+        return checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+                && checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestSmsPermissionsIfNeeded() {
+        if (hasSmsPermissions()) {
+            return;
+        }
+        viewModel.addLogEntry(getString(R.string.permissions_required_toast),
+                MainViewModel.LogEntry.Type.WARNING);
+        requestPermissions(
+                new String[]{
+                        Manifest.permission.RECEIVE_SMS,
+                        Manifest.permission.READ_SMS
+                },
+                PERMISSION_REQUEST_CODE
+        );
     }
 
     private void initializeUI() {
@@ -109,7 +127,6 @@ public class MainActivity extends AppCompatActivity {
         setupObservers();
         viewModel.addLogEntry(getString(R.string.started_main_activity), MainViewModel.LogEntry.Type.INFO);
         viewModel.loadStatistics();
-        uiInitialized = true;
     }
 
     private void setupEdgeToEdge() {
@@ -184,12 +201,15 @@ public class MainActivity extends AppCompatActivity {
             if (error != null && !error.isEmpty()) {
                 Toast.makeText(this, error, Toast.LENGTH_LONG).show();
                 viewModel.addLogEntry(error, MainViewModel.LogEntry.Type.ERROR);
+                // Cleared once shown. Left set, LiveData replays it to every new
+                // observer, so rotating the device re-toasted the same error.
+                viewModel.clearError();
             }
         });
 
         // Surface WorkManager state transitions so the user can see when the worker
         // is waiting for network, running, or has failed.
-        WorkManager.getInstance(this).getWorkInfosByTagLiveData("message")
+        WorkManager.getInstance(this).getWorkInfosByTagLiveData(SmsStoreWorker.WORK_TAG)
                 .observe(this, workInfos -> {
                     if (workInfos == null) return;
                     boolean anyRunning = false;
@@ -223,8 +243,10 @@ public class MainActivity extends AppCompatActivity {
     private void syncSms() {
         viewModel.addLogEntry(getString(R.string.starting_sms_sync), MainViewModel.LogEntry.Type.INFO);
 
-        MainApplication app = (MainApplication) getApplication();
-        app.setWatermark(0);
+        // Rewind the saved sync position so the queued run rescans the inbox from
+        // the start. Anything already delivered is recognised from the cache, so
+        // this re-reads messages rather than re-sending them.
+        SmsStoreWorker.requestFullRescan(this);
         viewModel.loadStatistics();
 
         Handler handler = new Handler(Looper.getMainLooper());
@@ -234,7 +256,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void stopSync() {
         viewModel.addLogEntry(getString(R.string.stopping_sync), MainViewModel.LogEntry.Type.WARNING);
-        WorkManager.getInstance(this).cancelAllWorkByTag("message");
+        // Cancels the unique chain, which also drops any run still queued behind
+        // the one in flight. Cancelling by tag would leave those queued to start
+        // after the cancellation and continue the sync the user just stopped.
+        WorkManager.getInstance(this).cancelUniqueWork(SmsStoreWorker.UNIQUE_WORK_NAME);
         viewModel.setSyncing(false);
     }
 
@@ -282,10 +307,6 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public void restoreMessages() {
-        // No longer needed with ViewModel approach
-    }
-
     public void addMessage(String line) {
         if (line.contains("ERROR")) {
             viewModel.addLogEntry(line, MainViewModel.LogEntry.Type.ERROR);
@@ -298,10 +319,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void updateStats(Context ctx) {
-        viewModel.loadStatistics();
-    }
-
     public void refreshStats(boolean withDiagnostics) {
         viewModel.loadStatistics(withDiagnostics);
     }
@@ -309,6 +326,22 @@ public class MainActivity extends AppCompatActivity {
     /** Progress reported by the sync worker, drawn without touching the database. */
     public void reportSyncProgress(int processed, int total) {
         viewModel.reportSyncProgress(processed, total);
+    }
+
+    /**
+     * Releases the application-held reference.
+     *
+     * <p>{@link MainApplication} lives for the whole process and posts work to the
+     * main looper, so leaving this reference set kept a destroyed activity, its
+     * view tree and its ViewModel reachable.
+     */
+    @Override
+    protected void onDestroy() {
+        MainApplication app = (MainApplication) getApplication();
+        if (app != null) {
+            app.setMainActivity(null);
+        }
+        super.onDestroy();
     }
 
     private void showClearCacheDialog() {
