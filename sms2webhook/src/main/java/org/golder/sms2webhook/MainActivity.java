@@ -17,6 +17,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -30,7 +31,6 @@ import androidx.work.WorkManager;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.google.android.material.progressindicator.LinearProgressIndicator;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -44,14 +44,15 @@ public class MainActivity extends AppCompatActivity {
     private LogAdapter logAdapter;
     private RecyclerView logRecyclerView;
     private SwipeRefreshLayout swipeRefreshLayout;
-    private LinearProgressIndicator progressBar;
-    private TextView storeCountTextView;
-    private TextView sentCountTextView;
-    private TextView unsentCountTextView;
+    private TextView statusHeadline;
+    private TextView statusDetail;
     private MaterialButton syncButton;
     private MaterialButton stopSyncButton;
 
     private final Map<UUID, WorkInfo.State> workStates = new HashMap<>();
+
+    /** Latest sync percentage, so the status line can render without re-querying. */
+    private int syncProgress = 0;
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -142,10 +143,8 @@ public class MainActivity extends AppCompatActivity {
         MaterialToolbar toolbar = findViewById(R.id.app_toolbar);
         setSupportActionBar(toolbar);
 
-        storeCountTextView = findViewById(R.id.storeCountTextView);
-        sentCountTextView = findViewById(R.id.sentCountTextView);
-        unsentCountTextView = findViewById(R.id.unsentCountTextView);
-        progressBar = findViewById(R.id.progressBar);
+        statusHeadline = findViewById(R.id.statusHeadline);
+        statusDetail = findViewById(R.id.statusDetail);
         swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
 
         logRecyclerView = findViewById(R.id.logRecyclerView);
@@ -157,11 +156,9 @@ public class MainActivity extends AppCompatActivity {
 
         syncButton = findViewById(R.id.syncButton);
         stopSyncButton = findViewById(R.id.stopSyncButton);
-        MaterialButton clearCacheButton = findViewById(R.id.clearCacheButton);
 
         syncButton.setOnClickListener(v -> syncSms());
         stopSyncButton.setOnClickListener(v -> stopSync());
-        clearCacheButton.setOnClickListener(v -> showClearCacheDialog());
     }
 
     private void setupObservers() {
@@ -173,16 +170,22 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        viewModel.getStatistics().observe(this, stats -> {
-            storeCountTextView.setText(String.valueOf(stats.totalCount));
-            sentCountTextView.setText(String.valueOf(stats.sentCount));
-            unsentCountTextView.setText(String.valueOf(stats.unsentCount));
+        viewModel.getStatus().observe(this, status -> {
+            if (status != null) {
+                renderStatus(status);
+            }
         });
 
-        // Driven by the worker's position in the sync, not by cached counts.
+        // Inline progress on the button, so a long sync still reports where it is
+        // without spending a whole card on a progress bar.
         viewModel.getSyncProgress().observe(this, progress -> {
-            if (progress != null) {
-                progressBar.setProgress(progress);
+            if (progress == null) {
+                return;
+            }
+            SyncStatus current = viewModel.getStatus().getValue();
+            syncProgress = progress;
+            if (current != null) {
+                renderStatus(current);
             }
         });
 
@@ -240,6 +243,41 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
+    /**
+     * Draws one state on the status card and the button.
+     *
+     * <p>The headline is coloured rather than filling the card: a full red block on
+     * an ordinary day because nothing has been synced yet is an alarm that gets
+     * learned to ignore. Colour plus text is unambiguous and keeps the contrast.
+     */
+    private void renderStatus(SyncStatus status) {
+        boolean syncing = status.state == SyncStatus.State.SYNCING;
+        statusHeadline.setText(syncing
+                ? getString(R.string.syncing_percent, status.percent)
+                : status.headline());
+        statusHeadline.setTextColor(ContextCompat.getColor(this, headlineColour(status.state)));
+
+        String detail = status.detail();
+        statusDetail.setText(detail == null ? "" : detail);
+        statusDetail.setVisibility(detail == null ? View.GONE : View.VISIBLE);
+    }
+
+    private int headlineColour(SyncStatus.State state) {
+        switch (state) {
+            case REFUSED:
+                return R.color.error;
+            case UNSYNCED:
+                return R.color.warning;
+            case SYNCED:
+                return R.color.success;
+            case CANNOT_READ:
+                return R.color.warning;
+            case SYNCING:
+            default:
+                return R.color.info;
+        }
+    }
+
     private void syncSms() {
         viewModel.addLogEntry(getString(R.string.starting_sms_sync), MainViewModel.LogEntry.Type.INFO);
 
@@ -295,7 +333,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (id == R.id.action_clear_cache) {
-            viewModel.clearCache();
+            // Through the dialog. The menu item used to clear the cache outright,
+            // which is the one action on this screen that cannot be undone.
+            showClearCacheDialog();
             return true;
         }
 

@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.2.0] - 2026-10-06
+
+Minor: the main screen is redesigned, and the app now uploads only what you
+received. No longer sending your sent messages is a deliberate behaviour change.
+
+### 🎨 Main screen
+- **One status line instead of three counters.** The screen showed Inbox / Uploaded /
+  Failed plus a progress bar, which answered "what has happened in my history"
+  rather than "is there anything outstanding". On a phone holding 624 messages with
+  an empty cache it read Uploaded 0, Failed 0 — indistinguishable from a fully synced
+  device.
+- The status line now reports one of four states: all uploaded, N not uploaded yet,
+  N refused, or syncing. The colour reflects urgency, so an ordinary unsynced phone
+  is not alarmed at.
+- Sync progress moved onto the status line (`Syncing… 42%`) rather than a separate bar.
+- **Clear cache moved to the overflow menu.** It is destructive and rarely needed.
+
+### 🐛 Fixes
+- **The sync queued from the menu cleared the cache without asking.** The confirmation
+  dialog only existed on the button that has just been removed; the menu item has been
+  present all along and went straight to the destructive action.
+- **The Clear cache dialog said the opposite of the truth** — "Sync SMS first to ensure
+  all messages are uploaded". Clearing the cache *causes* a full re-upload. It now
+  explains that, and that whether duplicates appear depends on the server recognising
+  them.
+- **Repeated diagnostics filled the activity log with one line.** Four copies of
+  "624 messages have no cache entry" were visible at rest on a real device, because
+  diagnostics run on every activity launch, every Clear cache and every sync exit. A
+  finding is now reported once and stays quiet while it remains true; a count that
+  changes reports the new number.
+
+### 🔒 Behaviour
+- **The sync is inbox-only.** The query was the whole `sms` table, so sent messages
+  were uploaded as well. That is not what the app promises to do, it inflated every
+  count derived from it, and it made inbox-minus-uploaded drift positive by roughly the
+  size of your sent history. **Existing installs will show fewer messages immediately.**
+
+### 🧪 Tests
+- 143 unit tests, up from 129. Added `SyncStatusTest` and `CacheDiagnosticsTest`,
+  covering the status mapping and the report-once rule. `StatisticsTest` was removed
+  with the counters it tested.
+
+---
+
 ## [2.1.2] - 2026-10-06
 
 Documentation only. **No application code changed since 2.1.1**, so the APK is

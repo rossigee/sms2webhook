@@ -120,8 +120,9 @@ Consequences worth knowing before changing anything here:
   the `content://sms` URI this app queries.
 - Values are strings, because `encodeMessage` reads every column with
   `cursor.getString`. A consumer must not assume a numeric JSON type.
-- The query has no selection, so it covers the whole `sms` table including sent
-  messages, not just the inbox. Filter on `type` (1 = inbox) if that matters.
+- The query is inbox-only, using `Telephony.Sms.Inbox.CONTENT_URI`. It was the whole
+  `sms` table until 2.2.0, which also uploaded sent messages and inflated every count
+  the dashboard derived from them.
 - The API key is **not** in the body. It goes out as an
   `Authorization: Bearer` header.
 
@@ -132,6 +133,8 @@ Consequences worth knowing before changing anything here:
 - Webhook upload: `WebhookUploader`
 - Database schema: `CacheDatabase.java`
 - ViewModel implementation: `MainViewModel.java`
+- Main screen status: `SyncStatus` — pure and Android-free so the mapping is unit tested
+- Cache consistency findings: `CacheDiagnostics`
 
 ## Development Guidelines
 
