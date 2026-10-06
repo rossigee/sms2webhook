@@ -5,6 +5,14 @@
 Minor: the main screen is redesigned, and the app now uploads only what you
 received. No longer sending your sent messages is a deliberate behaviour change.
 
+Also the release that repairs the ZapStore listing, whose **Install button was
+greyed out**. The relay had rejected the asset event carrying the APK because it
+requires a `version_code` tag that the publish action was not emitting, while the
+release event survived and pointed at an asset the relay did not have. The run still
+reported success, because the action awaited an array of promises rather than the
+promises themselves, so the rejection surfaced as noise rather than an error. Both
+are fixed in zapstore-publish v1.0.2, which `release.yml` picks up through `@v1`.
+
 ### 🎨 Main screen
 - **One status line instead of three counters.** The screen showed Inbox / Uploaded /
   Failed plus a progress bar, which answered "what has happened in my history"
@@ -37,10 +45,17 @@ received. No longer sending your sent messages is a deliberate behaviour change.
   count derived from it, and it made inbox-minus-uploaded drift positive by roughly the
   size of your sent history. **Existing installs will show fewer messages immediately.**
 
+### 📚 Documentation
+- **The ZapStore listing now carries the app icon.** `zapstore.yaml` gained an
+  `icon:` field; without it the store showed a placeholder letter. This is the first
+  release where it reaches a published event.
+- The webhook contract is documented for the first time: which status codes mean
+  delivered, retried, or permanently discarded, and the setup QR payload format.
+
 ### 🧪 Tests
-- 143 unit tests, up from 129. Added `SyncStatusTest` and `CacheDiagnosticsTest`,
-  covering the status mapping and the report-once rule. `StatisticsTest` was removed
-  with the counters it tested.
+- 146 unit tests, up from 129. Added `SyncStatusTest`, `CacheDiagnosticsTest`, and
+  coverage for reporting an unreadable inbox rather than claiming zero outstanding.
+  `StatisticsTest` was removed with the counters it tested.
 
 ---
 
