@@ -13,6 +13,7 @@ public class DigestCache {
     public static void set(Context context, String key, int value) {
         CacheDatabase db = getDatabase(context);
         db.cacheDao().insert(new CacheEntry(key, String.valueOf(value)));
+        db.cacheDao().pruneOldEntries();
     }
 
     /**

@@ -8,7 +8,7 @@ import androidx.room.RoomDatabase;
 import androidx.room.migration.Migration;
 import androidx.sqlite.db.SupportSQLiteDatabase;
 
-@Database(entities = {CacheEntry.class}, version = 2)
+@Database(entities = {CacheEntry.class}, version = 3)
 public abstract class CacheDatabase extends RoomDatabase {
     public abstract CacheDao cacheDao();
     
@@ -33,6 +33,14 @@ public abstract class CacheDatabase extends RoomDatabase {
             database.execSQL("ALTER TABLE `CacheEntry_new` RENAME TO `CacheEntry`");
         }
     };
+
+    static final Migration MIGRATION_2_3 = new Migration(2, 3) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            // Add timestamp for pruning support. Old rows default to 0 (will be pruned first if needed).
+            database.execSQL("ALTER TABLE `CacheEntry` ADD COLUMN `created_at` INTEGER NOT NULL DEFAULT 0");
+        }
+    };
     
     public static CacheDatabase getInstance(Context context) {
         if (INSTANCE == null) {
@@ -43,7 +51,7 @@ public abstract class CacheDatabase extends RoomDatabase {
                         CacheDatabase.class,
                         "cache-database"
                     )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build();
                 }
             }
