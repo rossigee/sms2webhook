@@ -6,7 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SMS2Webhook is an Android application that monitors incoming SMS messages and forwards them to a configured webhook endpoint. The app maintains a local cache using Room database to track processed messages and prevent duplicates.
 
-## Version 2.0.0 Updates (Current)
+## The 2.0.0 Rewrite
+
+Everything below still describes the current code, but it is the 2.0.0 rewrite, not
+recent news. Per-release detail belongs in `CHANGELOG.md`, which `zapstore.yaml`
+reads for published release notes — keep it current when cutting a release.
 
 ### Major Improvements
 - **MVVM Architecture**: Complete refactor to use ViewModels and LiveData
@@ -37,8 +41,8 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 # Generate release APK (debug-key signed unless release signing is configured)
 ./gradlew assembleRelease
 
-# Debug installation script (includes logcat monitoring)
-./debug_install.sh
+# Watch a device for crashes during a manual test
+adb logcat -s AndroidRuntime:E org.golder.sms2webhook:V
 ```
 
 ## Architecture Overview
@@ -191,7 +195,8 @@ A machine-specific `org.gradle.java.home` breaks CI, which is what caused every
 - Verify behavior with large SMS volumes
 - Test webhook failures and retry logic
 - Validate duplicate detection works correctly
-- Use debug_install.sh script to capture crash logs from devices
+- Capture crash logs from a device with the `adb logcat` command above; there is no
+  install-and-log helper script in this repository
 - Test on physical devices (especially Pixel phones) in addition to emulators
 
 ### Known Device Compatibility
@@ -200,6 +205,102 @@ A machine-specific `org.gradle.java.home` breaks CI, which is what caused every
 - ⚠️ Requires SMS permissions to be granted manually on first run
 
 ## CI/CD and Release Process
+
+### Release Checklist
+
+Work through these in order. Steps 1–3 must land on `master` **before** the tag is
+pushed, because the tag is what the release reads them from.
+
+**1. Bump the version** — `sms2webhook/build.gradle`
+
+`versionCode` must increase on every release. Android refuses to install an APK at
+an unchanged `versionCode`, so a forgotten bump publishes something nobody can
+upgrade to.
+
+`versionName` follows the convention this repo has already used: a **minor** bump
+for functionality added (2.1.0 added QR setup pairing), a **patch** bump for
+defect fixes alone (2.0.1 shipped an MVVM refactor as a patch).
+
+Verify against the built artifact, not the source file — this is the check that
+catches a typo the grep below will not:
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+./gradlew assembleRelease
+SDK="${ANDROID_HOME:-$HOME/Android/Sdk}"
+AAPT2=$(printf '%s\n' "$SDK"/build-tools/*/aapt2 | sort -V | tail -n 1)
+"$AAPT2" dump badging sms2webhook/build/outputs/apk/release/sms2webhook-release.apk | grep ^package
+# expect versionCode=N versionName='X.Y.Z', matching what you just set
+```
+
+`release.yml` greps the version out of `build.gradle` with
+`versionName "\K[^"]+`, so the value must keep its double quotes.
+
+**2. Write the changelog entry** — `CHANGELOG.md`
+
+**`zapstore.yaml` sets `release_notes: ./CHANGELOG.md`.** This file is the source
+ZapStore reads for a release's notes. It is not decorative: releasing without an
+entry publishes the *previous* release's notes, which has already happened once
+here (v2.1.1 shipped with the newest entry still at 2.0.1).
+
+Add the entry in the same PR as the version bump. Also note that
+`release.yml:104` builds the *GitHub* release notes from `git log --pretty=format:
+"- %s"`, so a squashed commit produces a one-line changelog on GitHub. Splitting a
+large change into logical commits before tagging improves that.
+
+**3. Green local checks**
+
+```bash
+./gradlew check   # unit tests and lint
+```
+
+**4. On-device smoke test**
+
+Not optional for anything touching the sync, uploads, permissions or WorkManager.
+None of that has automated coverage, and unit tests cannot catch a dropped SMS or a
+blank window. Install with `./gradlew installDebug`, then check:
+
+- a received SMS reaches the webhook
+- the sync completes and the progress bar advances
+- the counters move during a sync, and after Clear Cache
+- denying either SMS permission leaves a usable window
+
+**5. Merge through a PR**
+
+Branch, PR, review, then a human merges. Never merge your own PR.
+
+**6. Tag, and only then**
+
+```bash
+git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z
+```
+
+The trigger is `v[0-9]+.[0-9]+.[0-9]+`, so a prerelease such as `v2.2.0-rc1` is
+deliberately excluded and will publish nothing.
+
+**7. Confirm it actually published**
+
+`release.yml` sets `skip-if-unconfigured: 'true'`, so **a green run does not prove
+the Zapstore publish happened** — a missing or invalid `ZAPSTORE_SIGN_WITH` exits
+success having published nothing. Look for these lines in the `Publish to Zapstore`
+step:
+
+```
+APK resolved from ... sms2webhook-vX.Y.Z-release-signed.apk
+org.golder.sms2webhook X.Y.Z (code N), certificate ... via v2
+published kind 32267 ...
+```
+
+The resolved asset must be the **release-signed** APK. `zapstore.yaml` pins
+`match: ".*-release-signed\\.apk$"` so the debug APK cannot be chosen, and both APKs
+are deliberately attached to the GitHub release, so seeing `sms2webhook-*.apk`
+listed there is expected and not a mistake.
+
+If `ZAPSTORE_SIGN_WITH` is changed or rotated, run `verify-zapstore-signing.yml`
+first: it signs every event but uploads and publishes nothing.
+`zapstore-publisher.yml` separately proves the committed npub matches the signing
+credential, and runs weekly. A mismatch there is refused by the relay with no
+useful local symptom.
 
 ### GitHub Actions Workflows
 
