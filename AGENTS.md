@@ -281,35 +281,30 @@ git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z
 The trigger is `v[0-9]+.[0-9]+.[0-9]+`, so a prerelease such as `v2.2.0-rc1` is
 deliberately excluded and will publish nothing.
 
-**7. Confirm it actually published**
+**7. Confirm the publish step passed**
 
 `release.yml` sets `skip-if-unconfigured: 'true'`, so **a green run does not prove
 the Zapstore publish happened** — a missing or invalid `ZAPSTORE_SIGN_WITH` exits
-success having published nothing. Look for these lines in the `Publish to Zapstore`
-step:
+success having published nothing. The `Publish to Zapstore` step has to succeed. If it
+does not, re-run it (`gh run rerun <id> --failed`); it is idempotent, republishing the
+same content-addressed assets.
 
-```
-APK resolved from ... sms2webhook-vX.Y.Z-release-signed.apk
-org.golder.sms2webhook X.Y.Z (code N), certificate ... via v2
-uploaded sms2webhook/src/main/ic_launcher-playstore.png (...)
-published kind 32267 ...
-```
+One thing here is this repository's own problem: `zapstore.yaml` sets
+`release_notes: ./CHANGELOG.md`, so **an out-of-date changelog publishes out-of-date
+notes**. That is what step 2 is for. See the action's documentation for what happens
+when no section matches the released version.
 
-The `uploaded ic_launcher-playstore.png` line is how you confirm the listing icon
-actually reached the CDN. Without an `icon:` field in `zapstore.yaml` the kind 32267
-event carries no icon tag and the store shows a placeholder letter instead, which
-looks like a client bug rather than a missing config field.
+**How the publish actually works is not documented here, and should not be.** The
+`pubkey` and `match` fields, the relay's verification, credential rotation and the
+reporting of a publish all belong to
+[`rossigee/zapstore-publish`](https://github.com/rossigee/zapstore-publish). If the
+step reports success but the listing is wrong — no APK behind Install, a placeholder
+icon, rejected events — that is a bug in the action: fix and report it there rather
+than working around it or documenting it in this file.
 
-The resolved asset must be the **release-signed** APK. `zapstore.yaml` pins
-`match: ".*-release-signed\\.apk$"` so the debug APK cannot be chosen, and both APKs
-are deliberately attached to the GitHub release, so seeing `sms2webhook-*.apk`
-listed there is expected and not a mistake.
-
-If `ZAPSTORE_SIGN_WITH` is changed or rotated, run `verify-zapstore-signing.yml`
-first: it signs every event but uploads and publishes nothing.
-`zapstore-publisher.yml` separately proves the committed npub matches the signing
-credential, and runs weekly. A mismatch there is refused by the relay with no
-useful local symptom.
+If `ZAPSTORE_SIGN_WITH` is changed or rotated, run this repository's
+`verify-zapstore-signing.yml` first, which exercises the credential without writing to
+a shared relay.
 
 ### GitHub Actions Workflows
 
