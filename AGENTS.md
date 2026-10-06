@@ -6,7 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SMS2Webhook is an Android application that monitors incoming SMS messages and forwards them to a configured webhook endpoint. The app maintains a local cache using Room database to track processed messages and prevent duplicates.
 
-## Version 2.0.0 Updates (Current)
+## The 2.0.0 Rewrite
+
+Everything below still describes the current code, but it is the 2.0.0 rewrite, not
+recent news. Per-release detail belongs in `CHANGELOG.md`, which `zapstore.yaml`
+reads for published release notes — keep it current when cutting a release.
 
 ### Major Improvements
 - **MVVM Architecture**: Complete refactor to use ViewModels and LiveData
