@@ -23,7 +23,16 @@ final class SyncStatus {
         /** Messages the provider holds that have not been delivered yet. */
         UNSYNCED,
         /** Everything the provider holds has been accepted by the server. */
-        SYNCED
+        SYNCED,
+        /**
+         * The inbox could not be read, so nothing can be said about what is outstanding.
+         *
+         * <p>Distinct from {@link State#SYNCED} on purpose. A failed count used to
+         * report zero, which is indistinguishable from a genuinely empty inbox: on a
+         * device holding 438 messages with the SMS permission refused, the screen
+         * confidently showed a green "0 uploaded".
+         */
+        CANNOT_READ
     }
 
     final State state;
@@ -44,6 +53,19 @@ final class SyncStatus {
      * @param percent   sync progress, 0-100
      */
     static SyncStatus of(int inbox, int uploaded, int refused, boolean syncing, int percent) {
+        return of(inbox, uploaded, refused, syncing, percent, true);
+    }
+
+    /**
+     * @param inboxReadable whether the provider could be queried at all. False when
+     *                      the SMS permission is refused.
+     */
+    static SyncStatus of(int inbox, int uploaded, int refused, boolean syncing, int percent,
+                         boolean inboxReadable) {
+        if (!inboxReadable) {
+            return new SyncStatus(State.CANNOT_READ, 0, percent);
+        }
+
         // The cache can outlive the provider's messages, so an inbox smaller than
         // the recorded count is normal rather than an error, and a negative
         // remainder must never surface as a count.
@@ -78,10 +100,12 @@ final class SyncStatus {
                         ? "1 not uploaded yet"
                         : String.format(Locale.getDefault(), "%d not uploaded yet", count);
             case SYNCED:
-            default:
                 return count == 1
                         ? "1 uploaded"
                         : String.format(Locale.getDefault(), "%d uploaded", count);
+            case CANNOT_READ:
+            default:
+                return "Can't read your messages";
         }
     }
 
@@ -96,6 +120,8 @@ final class SyncStatus {
                 return null;
             case UNSYNCED:
                 return "Tap Sync to send them.";
+            case CANNOT_READ:
+                return "Grant SMS permission so this app can see them.";
             case SYNCED:
             default:
                 return null;

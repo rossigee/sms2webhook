@@ -270,6 +270,8 @@ public class MainActivity extends AppCompatActivity {
                 return R.color.warning;
             case SYNCED:
                 return R.color.success;
+            case CANNOT_READ:
+                return R.color.warning;
             case SYNCING:
             default:
                 return R.color.info;

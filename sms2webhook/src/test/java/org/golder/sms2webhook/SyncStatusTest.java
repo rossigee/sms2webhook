@@ -96,6 +96,33 @@ public class SyncStatusTest {
     }
 
     @Test
+    public void anUnreadableInboxIsNotAnEmptyOne() {
+        // The defect a device run found: with the SMS permission refused the count
+        // came back zero, so a phone holding 438 messages showed a green
+        // "0 uploaded" — the exact false-clear this replaced.
+        SyncStatus status = SyncStatus.of(0, 0, 0, false, 0, false);
+
+        assertEquals(SyncStatus.State.CANNOT_READ, status.state);
+        assertFalse("must not read as all-clear",
+                status.state == SyncStatus.State.SYNCED);
+        assertTrue(status.detail().contains("permission"));
+    }
+
+    @Test
+    public void unreadableOutranksRefusedAndSyncing() {
+        // Whatever else is true, not being able to see the inbox is the more
+        // important thing to say.
+        assertEquals(SyncStatus.State.CANNOT_READ,
+                SyncStatus.of(0, 0, 3, true, 40, false).state);
+    }
+
+    @Test
+    public void aReadableInboxStillMapsNormally() {
+        assertEquals(SyncStatus.State.SYNCED, SyncStatus.of(0, 0, 0, false, 0, true).state);
+        assertEquals(SyncStatus.State.UNSYNCED, SyncStatus.of(10, 0, 0, false, 0, true).state);
+    }
+
+    @Test
     public void everyCountCombinationLandsInAState() {
         for (int inbox = 0; inbox <= 5; inbox++) {
             for (int uploaded = 0; uploaded <= 5; uploaded++) {

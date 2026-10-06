@@ -19,6 +19,9 @@ public class MainViewModel extends AndroidViewModel {
     /** Ceiling on the retained activity log, so a long sync cannot grow it forever. */
     private static final int MAX_LOG_ENTRIES = 1000;
 
+    /** Returned by {@link #countMessages()} when the provider could not be queried. */
+    private static final int COUNT_UNREADABLE = -1;
+
     private final MutableLiveData<List<LogEntry>> logs = new MutableLiveData<>();
     private final MutableLiveData<SyncStatus> status = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>();
@@ -162,9 +165,10 @@ public class MainViewModel extends AndroidViewModel {
                 // never written again, so the dashboard showed the same three numbers
                 // for the whole life of the process no matter how much was uploaded,
                 // and "Clear cache" appeared to do nothing.
-                int inbox = countMessages();
+                int inboxCount = countMessages();
                 int uploaded = cacheDatabase.cacheDao().getSent();
                 int refused = cacheDatabase.cacheDao().getNotSent();
+                int inbox = inboxCount == COUNT_UNREADABLE ? 0 : inboxCount;
 
                 if (withDiagnostics) {
                     runDiagnostics(inbox, uploaded, refused);
@@ -174,7 +178,8 @@ public class MainViewModel extends AndroidViewModel {
                 Integer percent = syncProgress.getValue();
                 status.postValue(SyncStatus.of(inbox, uploaded, refused,
                         Boolean.TRUE.equals(syncing),
-                        percent == null ? 0 : percent));
+                        percent == null ? 0 : percent,
+                        inboxCount != COUNT_UNREADABLE));
                 isLoading.postValue(false);
             } catch (Exception e) {
                 errorMessage.postValue("Failed to load statistics: " + e.getMessage());
@@ -183,16 +188,28 @@ public class MainViewModel extends AndroidViewModel {
         });
     }
 
+    /**
+     * How many messages the inbox holds, or {@link #COUNT_UNREADABLE} when the
+     * provider could not be queried.
+     *
+     * <p>Distinct from zero on purpose. Reporting zero when the SMS permission is
+     * refused made the status tile claim "0 uploaded" on a device holding hundreds of
+     * messages, because zero outstanding and nothing readable look the same
+     * downstream.
+     */
     private int countMessages() {
         // Inbox only. Telephony.Sms.CONTENT_URI is the whole sms table, so counting
         // it made "Inbox" report sent messages too and made inbox-minus-uploaded
         // drift positive by roughly the size of the sent history.
         try (Cursor cursor = getApplication().getContentResolver().query(
                 Telephony.Sms.Inbox.CONTENT_URI, null, null, null, "_id")) {
-            return cursor == null ? 0 : cursor.getCount();
+            if (cursor == null) {
+                return COUNT_UNREADABLE;
+            }
+            return cursor.getCount();
         } catch (Exception e) {
             Log.w(TAG, "Could not count messages: " + e.getMessage());
-            return 0;
+            return COUNT_UNREADABLE;
         }
     }
 
