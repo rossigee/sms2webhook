@@ -288,8 +288,14 @@ step:
 ```
 APK resolved from ... sms2webhook-vX.Y.Z-release-signed.apk
 org.golder.sms2webhook X.Y.Z (code N), certificate ... via v2
+uploaded sms2webhook/src/main/ic_launcher-playstore.png (...)
 published kind 32267 ...
 ```
+
+The `uploaded ic_launcher-playstore.png` line is how you confirm the listing icon
+actually reached the CDN. Without an `icon:` field in `zapstore.yaml` the kind 32267
+event carries no icon tag and the store shows a placeholder letter instead, which
+looks like a client bug rather than a missing config field.
 
 The resolved asset must be the **release-signed** APK. `zapstore.yaml` pins
 `match: ".*-release-signed\\.apk$"` so the debug APK cannot be chosen, and both APKs

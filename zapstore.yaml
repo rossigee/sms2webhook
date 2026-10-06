@@ -78,6 +78,10 @@ license: MIT
 
 website: https://github.com/rossigee/sms2webhook
 
+# The listing falls back to a placeholder letter without this, because the
+# kind 32267 event only carries an icon tag when one is configured.
+icon: sms2webhook/src/main/ic_launcher-playstore.png
+
 images:
   - screenshots/04_settings_screen_filled.png
   - screenshots/05_main_screen_configured.png
