@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.2.1] - 2026-10-06
+
+Patch release after 2.2.0. No behaviour change to SMS handling or webhook format.
+
+### 🐛 Fixes
+- **Activity log had insufficient height in landscape (and some portrait) views.** The RecyclerView did not expand to fill the viewport on short heights, cutting off entries. Now uses `0dp` height with `app:layout_constraintBottom_toBottomOf="parent"` so the log fills available space and scrolls.
+- **ZapStore protocol details were leaking into this repo's release checklist.** The thin checklist now only asserts what is owned here: the publish step must succeed (re-run if needed), and `CHANGELOG.md` must be current because `zapstore.yaml` points `release_notes` at it. Everything else belongs in `rossigee/zapstore-publish`.
+
+### 📚 Documentation
+- The prerequisite action fixes (30 s publish timeout + one retry, `release_notes` fallback documented) are in zapstore-publish v1.0.3 with `@v1` updated to point at it.
+
+---
+
 ## [2.2.0] - 2026-10-06
 
 Minor: the main screen is redesigned, and the app now uploads only what you
