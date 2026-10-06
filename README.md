@@ -30,7 +30,7 @@ A modern Android app that forwards SMS messages to a webhook endpoint in real-ti
 1. **Configure your webhook** - Enter your server's webhook URL and optional API key
 2. **Grant SMS permissions** - Allow the app to read SMS messages
 3. **Automatic forwarding** - New messages are sent to your webhook instantly
-4. **Sync existing messages** - Optionally upload your SMS history
+4. **Sync existing messages** - Optionally upload the messages already in your inbox
 
 ## Webhook Format
 
@@ -57,6 +57,20 @@ The app sends a JSON payload to your webhook endpoint:
 }
 ```
 
+This is the phone's own messaging row, copied column by column, so the fields
+present vary by device and Android version. Treat everything except these three as
+optional, and guard the rest before reading them:
+
+| Field | Why |
+|---|---|
+| `address` | The sender. Always present. |
+| `body` | The message text. Always present. |
+| `date` | When the message arrived, epoch milliseconds. Always present. |
+
+`sub_id`, the SIM subscription a message arrived on, appears **only** where the
+device's messaging app records one. Do not rely on it. Note also that every value
+arrives as a JSON **string**, including the timestamps.
+
 ### Authentication
 
 If you configure an API key in the app settings, it will be sent as an HTTP header:
@@ -65,6 +79,63 @@ Authorization: Bearer your-api-key
 ```
 
 The API key is NOT included in the JSON payload itself.
+
+### What the app does with your status code
+
+This is the part that decides whether a message is ever delivered twice, so it
+matters more than the payload shape.
+
+| Your response | What the app does |
+|---|---|
+| **Any 2xx** | Delivered. Recorded, and never sent to you again. |
+| **401, 404** | Held and retried. These mean the key or URL is wrong, which the user can fix, so the message stays queued. The sync stops at the first one rather than failing every message. |
+| **408, 425, 429, any 5xx** | Held and retried. `Retry-After` is honoured if you send it. |
+| **400, 403, 413, 422** | Treated as final. Recorded and **never retried** — the message is effectively discarded. |
+| Connection failure | Held and retried. |
+
+Two consequences worth designing around:
+
+- **Return 2xx for success, not just 200.** `201` and `204` both count.
+- **A 4xx other than 401/404 silently drops the message.** If your endpoint can
+  fail validation in a way you would accept a retry for, answer `5xx` instead.
+
+If you deduplicate server-side, return `200` with:
+
+```
+X-Already-Existed: true
+```
+
+The app surfaces that as "already on server, not stored again" rather than "uploaded".
+It is informational — a `200` is accepted either way.
+
+## Setup QR Codes
+
+Settings → **Scan setup QR** fills in the webhook URL and API key from a QR code, for
+pairing a phone with your server without typing either by hand. If you are building a
+server that issues these codes, the format is one compact JSON object:
+
+```json
+{"v":1,"url":"https://your-host/sms/upload","key":"your-api-key","device":"Pixel 8"}
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `v` | yes | Must be exactly `1`. A missing version and a wrong version produce different errors, so a future format can be added without breaking older apps, and an older app refuses a newer one loudly. |
+| `url` | yes | Must be `https://`. Cleartext is refused. |
+| `key` | yes | Cannot be empty. Sent as `Authorization: Bearer`. There is no keyless QR pairing. |
+| `device` | no | A label for your own UI. Ignored by the app. |
+
+Unknown fields are ignored, and all values are trimmed before validation. A code is
+rejected with a specific message when it is not JSON, has the wrong version, has no
+URL, has a non-HTTPS or malformed URL, or has no key.
+
+Two implementation notes:
+
+- **QR codes are read with zxing-android-embedded**, so no companion app needs
+  installing on the phone.
+- The endpoint you point at is then treated as described under
+  [What the app does with your status code](#what-the-app-does-with-your-status-code).
+  Pairing a phone does not change any of those rules.
 
 ## Installation
 
@@ -118,6 +189,8 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 - 🔒 All data transmission uses HTTPS (recommended)
 - 📱 Messages are only sent to your configured webhook
 - 💾 Local cache only stores message hashes, not content
+- 📦 App data is excluded from Android backup and device-to-device transfer, so the
+  API key is not copied off the device
 - 🚫 No third-party servers or analytics
 - ✅ Complete source code available for audit
 
@@ -129,8 +202,17 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 - Look at the activity log for error messages
 
 **Duplicate messages?**
-- The app prevents duplicates automatically
-- Use "Clear Cache" if you need to re-sync everything
+- The app prevents duplicates automatically, and remembers messages your server
+  refused rather than sending them again
+- Clearing the cache in the menu **forgets that history, so the next sync re-sends
+  everything**. Use it only if you intend that — duplicates are avoided only if your
+  server recognises them.
+
+**A message shows as "refused"?**
+- The server answered with a 4xx that is not 401 or 404, and refused is treated as
+  final, so it is not retried
+- Check the activity log for the status code; a 401 or 404 means the API key or URL
+  is wrong and *will* be retried once fixed
 
 **Permission denied?**
 - Go to Settings → Apps → SMS2Webhook → Permissions
