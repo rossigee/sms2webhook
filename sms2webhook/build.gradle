@@ -97,7 +97,7 @@ android {
     }
 
     lint {
-        abortOnError = false
+        abortOnError = true
     }
     namespace = 'org.golder.sms2webhook'
 

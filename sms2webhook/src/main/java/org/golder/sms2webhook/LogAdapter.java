@@ -29,7 +29,7 @@ public class LogAdapter extends ListAdapter<MainViewModel.LogEntry, LogAdapter.L
 
             @Override
             public boolean areContentsTheSame(@NonNull MainViewModel.LogEntry oldItem, @NonNull MainViewModel.LogEntry newItem) {
-                return oldItem.type == newItem.type;
+                return oldItem.type.equals(newItem.type);
             }
         });
         this.context = context;
