@@ -6,9 +6,6 @@
     <string name="action_clear_cache">Clear cache</string>
     <string name="action_quit">Quit</string>
     <string name="activity_logs">Activity logs…</string>
-    <string name="retry_count">Failed</string>
-    <string name="sent_count">Uploaded</string>
-    <string name="store_count">Inbox</string>
     <string name="started_main_activity">Started main activity...</string>
     <string name="received_sms_from_s">Received SMS from %s</string>
     <string name="processing">"Processing %s"</string>
@@ -33,7 +30,7 @@
     <string name="sync_queued">Sync queued — waiting for network…</string>
     <string name="worker_running">Worker running…</string>
     <string name="worker_failed">Sync failed — check webhook URL and network</string>
-    <string name="clear_cache_message">This will clear all cached message data. Sync SMS first to ensure all messages are uploaded.</string>
+    <string name="clear_cache_message">This forgets which messages have already been uploaded. The next sync will send your whole history again. If your server recognises duplicates it will keep one copy of each; otherwise it will store them twice.</string>
     <string name="clear_all">Clear All</string>
     <string name="cancel">Cancel</string>
     <string name="invalid_url_https_required">Webhook URL must use HTTPS</string>
@@ -46,5 +43,6 @@
     <string name="scan_config_applied">Setup applied — endpoint and API key saved</string>
     <string name="scan_failed_to_save">Could not save the setup configuration</string>
     <string name="scan_camera_unavailable">No camera is available on this device</string>
-<string name="permissions_required_toast">SMS permission is needed to forward messages. Grant it in system settings.</string>
+<string name="syncing_percent">Syncing… %1$d%%</string>
+    <string name="permissions_required_toast">SMS permission is needed to forward messages. Grant it in system settings.</string>
 </resources>

@@ -20,7 +20,7 @@ public class MainViewModel extends AndroidViewModel {
     private static final int MAX_LOG_ENTRIES = 1000;
 
     private final MutableLiveData<List<LogEntry>> logs = new MutableLiveData<>();
-    private final MutableLiveData<Statistics> statistics = new MutableLiveData<>();
+    private final MutableLiveData<SyncStatus> status = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isSyncing = new MutableLiveData<>();
     private final MutableLiveData<String> errorMessage = new MutableLiveData<>();
@@ -38,13 +38,22 @@ public class MainViewModel extends AndroidViewModel {
     private final List<LogEntry> logList = new ArrayList<>();
     private final Object logLock = new Object();
 
+    /**
+     * Diagnostics already reported, so the same finding is not logged on every load.
+     *
+     * <p>Guarded because the diagnostics run inside a background task while the UI
+     * can also trigger a load, and two loads can overlap on the two-thread pool.
+     */
+    private List<CacheDiagnostics.Finding> reportedDiagnostics;
+    private final Object diagnosticsLock = new Object();
+
     private final Executor backgroundExecutor = Executors.newFixedThreadPool(2);
     private final CacheDatabase cacheDatabase;
 
     public MainViewModel(@NonNull Application application) {
         super(application);
         cacheDatabase = CacheDatabase.getInstance(application);
-        statistics.setValue(new Statistics(0, 0, 0));
+        status.setValue(SyncStatus.of(0, 0, 0, false, 0));
         logs.setValue(new ArrayList<>());
         isLoading.setValue(false);
         isSyncing.setValue(false);
@@ -54,8 +63,8 @@ public class MainViewModel extends AndroidViewModel {
         return logs;
     }
 
-    public LiveData<Statistics> getStatistics() {
-        return statistics;
+    public LiveData<SyncStatus> getStatus() {
+        return status;
     }
 
     public LiveData<Boolean> getIsLoading() {
@@ -133,12 +142,12 @@ public class MainViewModel extends AndroidViewModel {
     }
 
     /**
-     * Refreshes the cached counts.
+     * Refreshes the status shown on the main screen.
      *
      * @param withDiagnostics run the consistency checks. Off for the periodic
-     *        refresh during a sync: diagnostics append a log entry each time
-     *        they find something, so a sync refreshing every few dozen messages
-     *        filled the activity log with the same finding repeated.
+     *        refresh during a sync: each one appends a log entry when it finds
+     *        something, so a sync refreshing every few dozen messages filled the
+     *        activity log with the same finding repeated.
      */
     public void loadStatistics(boolean withDiagnostics) {
         // postValue rather than setValue: this method is also called from
@@ -153,16 +162,19 @@ public class MainViewModel extends AndroidViewModel {
                 // never written again, so the dashboard showed the same three numbers
                 // for the whole life of the process no matter how much was uploaded,
                 // and "Clear cache" appeared to do nothing.
-                int totalCount = countMessages();
-                int sentCount = cacheDatabase.cacheDao().getSent();
-                int unsentCount = cacheDatabase.cacheDao().getNotSent();
+                int inbox = countMessages();
+                int uploaded = cacheDatabase.cacheDao().getSent();
+                int refused = cacheDatabase.cacheDao().getNotSent();
 
                 if (withDiagnostics) {
-                    runDiagnostics(totalCount, sentCount, unsentCount);
+                    runDiagnostics(inbox, uploaded, refused);
                 }
 
-                Statistics stats = new Statistics(totalCount, sentCount, unsentCount);
-                statistics.postValue(stats);
+                Boolean syncing = isSyncing.getValue();
+                Integer percent = syncProgress.getValue();
+                status.postValue(SyncStatus.of(inbox, uploaded, refused,
+                        Boolean.TRUE.equals(syncing),
+                        percent == null ? 0 : percent));
                 isLoading.postValue(false);
             } catch (Exception e) {
                 errorMessage.postValue("Failed to load statistics: " + e.getMessage());
@@ -171,15 +183,12 @@ public class MainViewModel extends AndroidViewModel {
         });
     }
 
-    /**
-     * How many messages the provider is holding.
-     *
-     * <p>Returns 0 rather than throwing when the SMS permission has been refused,
-     * so a dashboard load on a device without permission still renders.
-     */
     private int countMessages() {
+        // Inbox only. Telephony.Sms.CONTENT_URI is the whole sms table, so counting
+        // it made "Inbox" report sent messages too and made inbox-minus-uploaded
+        // drift positive by roughly the size of the sent history.
         try (Cursor cursor = getApplication().getContentResolver().query(
-                Telephony.Sms.CONTENT_URI, null, null, null, "_id")) {
+                Telephony.Sms.Inbox.CONTENT_URI, null, null, null, "_id")) {
             return cursor == null ? 0 : cursor.getCount();
         } catch (Exception e) {
             Log.w(TAG, "Could not count messages: " + e.getMessage());
@@ -187,28 +196,27 @@ public class MainViewModel extends AndroidViewModel {
         }
     }
 
-    private void runDiagnostics(int storeCount, int sentCount, int unsentCount) {
+    private void runDiagnostics(int inbox, int uploaded, int refused) {
         try {
-            int uniqueCount = cacheDatabase.cacheDao().getUniqueCount();
-            int totalCacheEntries = cacheDatabase.cacheDao().getTotalCount();
+            List<CacheDiagnostics.Finding> findings = CacheDiagnostics.evaluate(
+                    inbox,
+                    cacheDatabase.cacheDao().getUniqueCount(),
+                    cacheDatabase.cacheDao().getTotalCount(),
+                    uploaded,
+                    refused);
 
-            // Check for duplicates
-            if (totalCacheEntries > uniqueCount) {
-                int duplicates = totalCacheEntries - uniqueCount;
-                addLogEntry("⚠️ Found " + duplicates + " duplicate cache entries", LogEntry.Type.WARNING);
+            List<CacheDiagnostics.Finding> fresh =
+                    CacheDiagnostics.sinceReported(reportedDiagnostics, findings);
+
+            synchronized (diagnosticsLock) {
+                // Remembered even when nothing was new, so a finding that is still
+                // true stays quiet. Cleared when there is nothing to report, so a
+                // finding that comes back is reported again.
+                reportedDiagnostics = findings.isEmpty() ? null : findings;
             }
 
-            // Check for missing entries
-            if (storeCount > uniqueCount) {
-                int missing = storeCount - uniqueCount;
-                addLogEntry("ℹ️ " + missing + " messages have no cache entry", LogEntry.Type.INFO);
-            }
-
-            // Check for inconsistencies
-            int accountedFor = sentCount + unsentCount;
-            if (accountedFor != uniqueCount && totalCacheEntries == uniqueCount) {
-                addLogEntry("⚠️ Cache inconsistency detected: " + uniqueCount + " unique messages, but " +
-                           sentCount + " sent + " + unsentCount + " unsent", LogEntry.Type.WARNING);
+            for (CacheDiagnostics.Finding finding : fresh) {
+                addLogEntry(finding.message, finding.type);
             }
         } catch (Exception e) {
             // Diagnostics failed, but don't break the app
@@ -243,20 +251,6 @@ public class MainViewModel extends AndroidViewModel {
                 isLoading.postValue(false);
             }
         });
-    }
-
-    public static class Statistics {
-        public final int totalCount;
-        public final int sentCount;
-        public final int unsentCount;
-        public final int progress;
-
-        public Statistics(int totalCount, int sentCount, int unsentCount) {
-            this.totalCount = totalCount;
-            this.sentCount = sentCount;
-            this.unsentCount = unsentCount;
-            this.progress = totalCount > 0 ? Math.min(100, (sentCount * 100) / totalCount) : 0;
-        }
     }
 
     public static class LogEntry {

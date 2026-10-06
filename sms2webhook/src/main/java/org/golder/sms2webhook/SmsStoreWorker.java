@@ -122,8 +122,11 @@ public class SmsStoreWorker extends Worker {
         // position and each uploaded the same messages.
         int watermark = prefs.getInt(PREF_WATERMARK, 0);
 
+        // Inbox only. Telephony.Sms.CONTENT_URI is the whole sms table, so this
+        // also uploaded sent messages, which is not what the app promises to do
+        // and inflated the counts the dashboard derived from them.
         try (Cursor cursor = context.getContentResolver().query(
-                Telephony.Sms.CONTENT_URI, null, null, null, "_id ASC")) {
+                Telephony.Sms.Inbox.CONTENT_URI, null, null, null, "_id ASC")) {
             if (cursor == null) {
                 Log.e(TAG, "Failed to query SMS inbox.");
                 app.addMessage("ERROR: Failed to query SMS inbox.");
