@@ -202,6 +202,18 @@ A machine-specific `org.gradle.java.home` breaks CI, which is what caused every
   install-and-log helper script in this repository
 - Test on physical devices (especially Pixel phones) in addition to emulators
 
+### Backlog / Tech Debt
+
+All three tracked tech-debt items have been resolved:
+
+- #96 LogAdapter copies full list and scrolls on every update — fixed in #99
+- #97 Digest cache grows without bound (no pruning) — fixed in #99
+- #98 Lint configured with `abortOnError=false` (never gates CI) — fixed (abortOnError now true)
+
+Broader testing gaps are noted above. New low-priority items can be tracked as issues if they surface.
+
+### Known Device Compatibility
+
 ### Known Device Compatibility
 - ✅ Android emulators (API 28+)
 - ✅ Pixel 8 (after minSdk and error handling fixes)
