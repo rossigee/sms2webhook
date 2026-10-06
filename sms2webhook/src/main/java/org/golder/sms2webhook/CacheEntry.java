@@ -15,8 +15,12 @@ public class CacheEntry {
     @ColumnInfo(name = "value")
     public String value;
 
+    @ColumnInfo(name = "created_at")
+    public long createdAt;
+
     public CacheEntry(@NonNull String key, String value) {
         this.key = key;
         this.value = value;
+        this.createdAt = System.currentTimeMillis();
     }
 }

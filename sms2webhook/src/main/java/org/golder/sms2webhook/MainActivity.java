@@ -162,10 +162,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupObservers() {
-        // Scroll to top so newest entries are always visible
         viewModel.getLogs().observe(this, logs -> {
-            logAdapter.updateLogs(logs);
-            if (!logs.isEmpty()) {
+            boolean atTop = ((LinearLayoutManager) logRecyclerView.getLayoutManager())
+                    .findFirstVisibleItemPosition() <= 1;
+            logAdapter.submitLogs(logs);
+            if (!logs.isEmpty() && atTop) {
                 logRecyclerView.scrollToPosition(0);
             }
         });

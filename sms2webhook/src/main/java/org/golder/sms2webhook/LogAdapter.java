@@ -8,19 +8,30 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-public class LogAdapter extends RecyclerView.Adapter<LogAdapter.LogViewHolder> {
-    private List<MainViewModel.LogEntry> logs = new ArrayList<>();
+public class LogAdapter extends ListAdapter<MainViewModel.LogEntry, LogAdapter.LogViewHolder> {
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
     private final Context context;
 
     public LogAdapter(Context context) {
+        super(new DiffUtil.ItemCallback<MainViewModel.LogEntry>() {
+            @Override
+            public boolean areItemsTheSame(@NonNull MainViewModel.LogEntry oldItem, @NonNull MainViewModel.LogEntry newItem) {
+                return oldItem.timestamp == newItem.timestamp && oldItem.message.equals(newItem.message);
+            }
+
+            @Override
+            public boolean areContentsTheSame(@NonNull MainViewModel.LogEntry oldItem, @NonNull MainViewModel.LogEntry newItem) {
+                return oldItem.type == newItem.type;
+            }
+        });
         this.context = context;
     }
 
@@ -34,24 +45,12 @@ public class LogAdapter extends RecyclerView.Adapter<LogAdapter.LogViewHolder> {
 
     @Override
     public void onBindViewHolder(@NonNull LogViewHolder holder, int position) {
-        MainViewModel.LogEntry entry = logs.get(position);
+        MainViewModel.LogEntry entry = getItem(position);
         holder.bind(entry);
     }
 
-    @Override
-    public int getItemCount() {
-        return logs.size();
-    }
-
-    public void updateLogs(List<MainViewModel.LogEntry> newLogs) {
-        int prevSize = this.logs.size();
-        this.logs = new ArrayList<>(newLogs);
-        int newSize = this.logs.size();
-        if (newSize > prevSize) {
-            notifyItemRangeInserted(0, newSize - prevSize);
-        } else {
-            notifyDataSetChanged();
-        }
+    public void submitLogs(List<MainViewModel.LogEntry> newLogs) {
+        submitList(newLogs);
     }
 
     class LogViewHolder extends RecyclerView.ViewHolder {

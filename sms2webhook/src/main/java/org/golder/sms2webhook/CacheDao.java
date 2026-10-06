@@ -37,6 +37,9 @@ public interface CacheDao {
     @Query("DELETE FROM cacheentry")
     void clear();
     
+    @Query("DELETE FROM cacheentry WHERE key NOT IN (SELECT key FROM cacheentry ORDER BY created_at DESC LIMIT 5000)")
+    void pruneOldEntries();
+    
     @Query("SELECT COUNT(DISTINCT key) FROM cacheentry")
     int getUniqueCount();
     
