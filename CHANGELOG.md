@@ -1,5 +1,63 @@
 # Changelog
 
+## [2.1.1] - 2026-10-06
+
+Patch release. Nothing here adds functionality and the webhook payload is
+unchanged; every change corrects a defect.
+
+### 🐛 Fixes — message loss and duplicate uploads
+- **Refused messages were re-uploaded on every sync, forever.** A 4xx was written to
+  the digest cache but never consulted: the "have we sent this?" check compared the
+  cached status against an exact `200`. Any 2xx that was not 200 (`201`, `204`) and
+  any 3xx had the same fate.
+- **Overlapping workers uploaded the same messages.** Every incoming SMS enqueues a
+  sync and the toolbar can start one, all as independent work requests, so
+  WorkManager ran them in parallel against a single shared watermark. Syncs are now
+  unique work chained with `APPEND_OR_REPLACE`.
+- **A 401 or 404 was cached as a final outcome**, so a mistyped API key or webhook
+  URL marked an entire backlog permanently refused and none of it was ever sent.
+  Both are retried now, and the first one aborts the sync.
+- **The dedup digest covered the whole provider row**, so `read`/`seen` flipping
+  when a message is opened re-uploaded it, and per-install `_id` renumbering made a
+  restored device re-upload its entire history. It now covers only
+  `address`/`date_sent`/`body`/`thread_id`, matching the collector's server-side hash.
+
+### 🐛 Other fixes
+- Statistics counters were computed once at process start and never refreshed, so
+  the dashboard did not move during a sync and clearing the cache appeared to do
+  nothing.
+- The activity log was mutated and copied from three threads concurrently, which
+  throws. It is now bounded and copied under a lock.
+- Denying either SMS permission left a blank window with no toolbar, no settings and
+  no way to ask again. The UI is now always built.
+- Webhook requests had no timeouts. The platform default is zero, meaning no limit,
+  so a server that accepted the connection and never replied blocked the worker.
+- The sync was enqueued from a main-looper post inside `onReceive`, which a
+  manifest-declared receiver has no guarantee of running, so an SMS could be dropped.
+- `moveToPosition` failure returned `failure()`, permanently wedging a sync that a
+  deleted message had shortened.
+- `Content-Type` was the malformed `application/json; utf-8`.
+
+### 🔒 Security
+- **The webhook API key was included in any `adb backup`**, being held in cleartext
+  in the default preference store with `allowBackup` defaulting to true. Backup and
+  device-to-device transfer are now both excluded.
+- The `Application` held a strong reference to a destroyed `Activity`, along with
+  its view tree and ViewModel.
+
+### 📚 Documentation
+- `CLAUDE.md` documented a webhook payload of `from`/`to`/`text`/`timestamp`/`sim`.
+  None of those fields exist. Corrected to the payload actually sent.
+- This entry. `zapstore.yaml` reads this file for store release notes, so an out-of-date
+  file publishes out-of-date notes.
+
+### 🧪 Tests
+- 129 unit tests, up from 74. New coverage for the deduplication rule across
+  repeated syncs, the message digest, the activity log bound, and the status
+  classification.
+
+---
+
 ## [2.0.1] - 2025-07-04
 
 ### 🐛 Fixes
