@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.1.3] - 2026-10-06
+
+Documentation only. **No application code changed since 2.1.2**, so the APK is
+functionally identical; only `versionCode` and `versionName` differ.
+
+Published to repair the ZapStore listing. The **Install button was greyed out**
+because the relay had rejected the asset event that carries the APK, so there was
+nothing for the button to install.
+
+The relay requires a `version_code` tag on any asset event with an `android-`
+platform, and the publish action was not emitting one. The run still reported
+success, because the action awaited an array of promises rather than the promises
+themselves, so the relay's rejection surfaced as noise instead of an error. Both
+are fixed in zapstore-publish v1.0.2; this release exists to publish an asset
+event the relay accepts.
+
+### 📚 Documentation
+- **The ZapStore listing now carries the app icon.** `zapstore.yaml` gained an
+  `icon:` field, so the listing no longer shows a placeholder letter in place of
+  the app icon.
+- **The release checklist names the icon's upload line.** A publish that silently
+  skipped the icon would otherwise look successful.
+
 ## [2.1.2] - 2026-10-06
 
 Documentation only. **No application code changed since 2.1.1**, so the APK is
