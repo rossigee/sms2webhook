@@ -285,15 +285,36 @@ deliberately excluded and will publish nothing.
 
 `release.yml` sets `skip-if-unconfigured: 'true'`, so **a green run does not prove
 the Zapstore publish happened** — a missing or invalid `ZAPSTORE_SIGN_WITH` exits
-success having published nothing. Look for these lines in the `Publish to Zapstore`
-step:
+success having published nothing.
+
+Four kinds are published, and **the one that carries the APK is `3063`**. Check for
+all of them, in this order:
 
 ```
 APK resolved from ... sms2webhook-vX.Y.Z-release-signed.apk
 org.golder.sms2webhook X.Y.Z (code N), certificate ... via v2
 uploaded sms2webhook/src/main/ic_launcher-playstore.png (...)
-published kind 32267 ...
+published kind 32267 ...   release description
+published kind 3063 ...    asset event - THE APK
+published kind 30063 ...    metadata
 ```
+
+**Do not accept `32267` as proof of a publish.** It is the release description, and it
+is published first and independently of the asset event, so it succeeds in exactly the
+runs that leave the listing broken. Two releases have now failed this way with
+`32267` present in the log:
+
+- v2.1.2 — the relay rejected the 3063 event for a missing `version_code` tag, and the
+  action swallowed the rejection, so the run exited 0. The listing had a release event
+  pointing at an asset the relay did not have: **Install greyed out**.
+- v2.2.0 — the relay stopped responding partway through; the action gave up after
+  about four seconds and logged `publish timed out`. No 3063, so the listing was in the
+  same state again.
+
+If the step fails, or if `published kind 3063` is absent from a green run, **re-run the
+failed job** (`gh run rerun <id> --failed`) before cutting anything else. The v2.2.0
+failure was transient and completed on the first re-run. The step is idempotent: it
+republishes the release description and re-uploads the same content-addressed assets.
 
 The `uploaded ic_launcher-playstore.png` line is how you confirm the listing icon
 actually reached the CDN. Without an `icon:` field in `zapstore.yaml` the kind 32267
