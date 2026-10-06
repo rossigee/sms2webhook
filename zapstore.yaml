@@ -27,9 +27,12 @@ description: |
 
   ## What it sends
 
-  Every forwarded message is posted as JSON to the single endpoint you set,
-  including the sender address, the message body, the timestamp and the SIM
-  slot it arrived on. If you configure an API key it is sent as an
+  Every forwarded message is posted as JSON to the single endpoint you set. The
+  payload is your phone's own messaging row rather than a fixed shape, so the
+  fields present vary by device and Android version: the sender `address`, the
+  message `body` and the `date` timestamp are always there, and devices whose
+  messaging app records a SIM subscription include it as `sub_id`. Treat anything
+  beyond those as optional. If you configure an API key it is sent as an
   `Authorization: Bearer` header.
 
   ## What leaves the device
