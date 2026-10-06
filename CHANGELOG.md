@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.1.2] - 2026-10-06
+
+Documentation only. **No application code changed since 2.1.1**, so the APK is
+functionally identical; only `versionCode` and `versionName` differ.
+
+Published so that the ZapStore listing carries corrected text. The listing is a
+signed Nostr event with the description and screenshots baked in, and
+`zapstore.yaml` and this file are inputs to publishing rather than the source of
+truth — so the 2.1.1 listing kept its original wording until a new publish replaced
+the event.
+
+### 📚 Documentation
+- **Corrected the ZapStore listing, which promised a SIM slot that may not be
+  sent.** It said every payload includes "the SIM slot it arrived on".
+  `SmsStoreWorker.encodeMessage` copies every column the cursor returns from
+  `content://sms`, so `sub_id` is present only where the device's messaging
+  provider exposes it. The listing now states the actual contract: the payload is
+  the provider's own row, its shape varies by device, and only `address`, `body`
+  and `date` are dependable.
+- **Added the missing 2.1.1 entry**, which this release had shipped without.
+- Added a release checklist to `AGENTS.md`, covering the version bump, the
+  changelog entry, the on-device smoke test, PR review, tagging, and how to confirm
+  the Zapstore publish actually happened.
+- `AGENTS.md` referenced a `debug_install.sh` script that does not exist in this
+  repository; the guidance now points at `adb logcat`.
+- The `## Version 2.0.0 Updates (Current)` heading no longer claims to be current.
+
+---
+
 ## [2.1.1] - 2026-10-06
 
 Patch release. Nothing here adds functionality and the webhook payload is
