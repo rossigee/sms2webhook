@@ -44,7 +44,7 @@ jobs:
         uses: ./.github/actions/summarise-lint
         with:
           report-path: ${{ env.MODULE }}/build/reports/lint-results-debug.xml
-          note: Lint is configured with abortOnError false, so these do not block the pull request.
+          note: Lint errors now fail the build (abortOnError=true).
 
       - name: APK size check
         run: |
